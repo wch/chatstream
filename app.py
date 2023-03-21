@@ -45,7 +45,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     def chat_string_size() -> int:
         return len(chat_string[0])
 
-    @reactive.poll(chat_string_size, 0.05)
+    @reactive.poll(chat_string_size, 0.04)
     def current_chat_string() -> str:
         return chat_string[0]
 
