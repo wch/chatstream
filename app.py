@@ -26,20 +26,28 @@ app_ui = ui.page_fluid(
 
 
 async def set_val_streaming(
-    v: reactive.Value[str], stream: AsyncGenerator[str, None], session: Session
+    v: list[str], stream: AsyncGenerator[str, None], session: Session
 ):
     async for tok in stream:
-        v.set(v.get() + tok)
-        await reactive.flush()
+        v[0] += tok
+        await asyncio.sleep(0)
 
 
 def server(input: Inputs, output: Outputs, session: Session):
-    chat_string: reactive.Value[str] = reactive.Value("")
+    chat_string: list[str] = [""]
+
+    def chat_string_size() -> int:
+        return len(chat_string[0])
+
+    @reactive.poll(chat_string_size, 0.06)
+    def current_chat_string() -> str:
+        print("current_chat_string")
+        return chat_string[0]
 
     @reactive.Effect
     @reactive.event(input.ask)
     def _():
-        chat_string.set("")
+        chat_string[0] = ""
         asyncio.Task(
             set_val_streaming(
                 chat_string, api.do_query_streaming(input.query()), session
@@ -51,7 +59,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     @output
     @render.ui
     def response():
-        return ui.markdown(chat_string())
+        return ui.markdown(current_chat_string())
 
 
 app = App(app_ui, server)
