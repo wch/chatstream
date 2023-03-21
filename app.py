@@ -11,7 +11,7 @@ app_ui = ui.page_fluid(
     ui.input_text_area(
         "query",
         "Dear GPT-3,",
-        value="Tell me about yourself.",
+        # value="Tell me about yourself.",
         placeholder="Ask me anything...",
         width="100%",
     ),
@@ -27,21 +27,22 @@ app_ui = ui.page_fluid(
 
 async def set_val_streaming(
     v: list[str], stream: AsyncGenerator[str, None], session: Session
-):
+) -> None:
     async for tok in stream:
         v[0] += tok
+        # Need to sleep to allow the UI to update
         await asyncio.sleep(0)
 
 
 def server(input: Inputs, output: Outputs, session: Session):
+    # Put the string in a list so that we can mutate it.
     chat_string: list[str] = [""]
 
     def chat_string_size() -> int:
         return len(chat_string[0])
 
-    @reactive.poll(chat_string_size, 0.06)
+    @reactive.poll(chat_string_size, 0.05)
     def current_chat_string() -> str:
-        print("current_chat_string")
         return chat_string[0]
 
     @reactive.Effect

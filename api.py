@@ -5,8 +5,6 @@ from typing import AsyncGenerator, Literal, TypedDict
 import keys
 import openai
 
-from shiny import reactive
-
 openai.api_key = keys.openai_api_key
 
 
