@@ -36,9 +36,7 @@ class ChatCompletion(TypedDict):
     choices: list[Choices]
 
 
-async def do_query_streaming(
-    message: str, v: reactive.Value[str]
-) -> AsyncGenerator[str, None]:
+async def do_query_streaming(message: str) -> AsyncGenerator[str, None]:
     for resp in openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[

@@ -42,7 +42,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         chat_string.set("")
         asyncio.Task(
             set_val_streaming(
-                chat_string, api.do_query_streaming(input.query(), chat_string), session
+                chat_string, api.do_query_streaming(input.query()), session
             )
         )
 
