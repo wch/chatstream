@@ -24,7 +24,11 @@ app_ui = ui.page_fluid(
     ),
     ui.p(
         {"style": "margin-top: 10px;"},
-        ui.a("Source code", href="https://github.com/wch/shiny-openai-chat"),
+        ui.a(
+            "Source code",
+            href="https://github.com/wch/shiny-openai-chat",
+            target="_blank",
+        ),
     ),
 )
 
