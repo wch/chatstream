@@ -29,12 +29,23 @@ app_ui = ui.page_fluid(
 )
 
 
-async def set_val_streaming(
-    v: list[str], stream: AsyncGenerator[str, None], session: Session
-) -> None:
-    async for tok in stream:
-        v[0] += tok
-        # Need to sleep to allow the UI to update
+async def set_val_streaming(v: list[str], stream: AsyncGenerator[str, None]) -> None:
+    """
+    Given an async generator that returns strings, append each string and to an
+    accumulator string.
+
+    Parameters
+    ----------
+    v
+        A one-element list containing the string to update. The list wrapper is needed
+        so that the string can be mutated.
+
+    stream
+        An async generator that yields strings.
+    """
+    async for token in stream:
+        v[0] += token
+        # Need to sleep so that this will yield and allow reactive stuff to run.
         await asyncio.sleep(0)
 
 
@@ -53,12 +64,14 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.event(input.ask)
     def _():
         chat_string[0] = ""
+
+        # Launch a task that updates the chat string asynchronously.
         asyncio.Task(
-            set_val_streaming(
-                chat_string, api.do_query_streaming(input.query()), session
-            )
+            set_val_streaming(chat_string, api.do_query_streaming(input.query()))
         )
 
+        # This version does the the same, but without streaming. It usually results in
+        # a long pause, and then the entire response is displayed at once.
         # chat_string.set(api.do_query(input.query()))
 
     @output
