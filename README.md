@@ -18,3 +18,24 @@ Then run:
 ```
 shiny run app.py
 ```
+
+
+## Deployment
+
+First, make sure that the rsconnect-python package is installed:
+
+```
+pip install rsconnect-python
+```
+
+Then make sure a server is registered. For example you can register a server named `colorado` with the following command. Note that you can get the API key from your server's web interface:
+
+```
+rsconnect add -n colorado -s https://colorado.posit.co/rsc/ -k your_api_key
+```
+
+Finally, deploy the app with the following command:
+
+```
+rsconnect deploy shiny -n colorado .
+```
