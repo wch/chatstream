@@ -33,26 +33,6 @@ app_ui = ui.page_fluid(
 )
 
 
-async def set_val_streaming(v: list[str], stream: AsyncGenerator[str, None]) -> None:
-    """
-    Given an async generator that returns strings, append each string and to an
-    accumulator string.
-
-    Parameters
-    ----------
-    v
-        A one-element list containing the string to update. The list wrapper is needed
-        so that the string can be mutated.
-
-    stream
-        An async generator that yields strings.
-    """
-    async for token in stream:
-        v[0] += token
-        # Need to sleep so that this will yield and allow reactive stuff to run.
-        await asyncio.sleep(0)
-
-
 def server(input: Inputs, output: Outputs, session: Session):
     # Put the string in a list so that we can mutate it.
     chat_string: list[str] = [""]
@@ -85,3 +65,23 @@ def server(input: Inputs, output: Outputs, session: Session):
 
 
 app = App(app_ui, server)
+
+
+async def set_val_streaming(v: list[str], stream: AsyncGenerator[str, None]) -> None:
+    """
+    Given an async generator that returns strings, append each string and to an
+    accumulator string.
+
+    Parameters
+    ----------
+    v
+        A one-element list containing the string to update. The list wrapper is needed
+        so that the string can be mutated.
+
+    stream
+        An async generator that yields strings.
+    """
+    async for token in stream:
+        v[0] += token
+        # Need to sleep so that this will yield and allow reactive stuff to run.
+        await asyncio.sleep(0)
