@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import AsyncGenerator
+from typing import AsyncIterator
 
 import api
 
@@ -50,9 +50,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         chat_string[0] = ""
 
         # Launch a task that updates the chat string asynchronously.
-        asyncio.Task(
-            set_val_streaming(chat_string, api.do_query_streaming(input.query()))
-        )
+        asyncio.Task(set_val_streaming(chat_string, api.StreamingQuery(input.query())))
 
         # This version does the the same, but without streaming. It usually results in
         # a long pause, and then the entire response is displayed at once.
@@ -67,7 +65,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 app = App(app_ui, server)
 
 
-async def set_val_streaming(v: list[str], stream: AsyncGenerator[str, None]) -> None:
+async def set_val_streaming(v: list[str], stream: AsyncIterator[str]) -> None:
     """
     Given an async generator that returns strings, append each string and to an
     accumulator string.

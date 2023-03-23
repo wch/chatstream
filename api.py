@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import AsyncGenerator, Literal, TypedDict, cast
+from typing import AsyncGenerator, AsyncIterator, Literal, TypedDict, cast
 
 import keys
 import openai
@@ -51,6 +51,29 @@ class ChatCompletionNonStreaming(TypedDict):
 class ChatCompletionStreaming(ChatCompletionBase):
     object: Literal["chat.completion.chunk"]
     choices: list[ChoiceStreaming]
+
+
+class StreamingQuery:
+    def __init__(self, message: str) -> None:
+        self.message = message
+        self.stream = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": message},
+            ],
+            stream=True,
+        )
+
+    def __aiter__(self) -> AsyncIterator[str]:
+        return self
+
+    async def __anext__(self) -> str:
+        response = cast(ChatCompletionStreaming, next(self.stream))
+        if "content" in response["choices"][0]["delta"]:
+            return response["choices"][0]["delta"]["content"]
+        else:
+            return ""
 
 
 async def do_query_streaming(message: str) -> AsyncGenerator[str, None]:
