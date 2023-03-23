@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import AsyncGenerator, Literal, TypedDict
+from typing import AsyncGenerator, Literal, TypedDict, cast
 
 import keys
 import openai
@@ -9,7 +9,7 @@ openai.api_key = keys.openai_api_key
 
 
 class Usage(TypedDict):
-    completion_tokens: int
+    completion_tokens: int  # Note: this doesn't seem to be present in all cases.
     prompt_tokens: int
     total_tokens: int
 
@@ -19,23 +19,42 @@ class Message(TypedDict):
     role: str
 
 
-class Choices(TypedDict):
-    finish_reason: str
+class ChoiceDelta(TypedDict):
+    content: str
+
+
+class ChoiceBase(TypedDict):
+    finish_reason: Literal["stop"] | None
     index: int
+
+
+class ChoiceNonStreaming(ChoiceBase):
     message: Message
 
 
-class ChatCompletion(TypedDict):
+class ChoiceStreaming(ChoiceBase):
+    delta: ChoiceDelta
+
+
+class ChatCompletionBase(TypedDict):
     id: str
-    object: Literal["chat.completion"]
     created: int
     model: str
+
+
+class ChatCompletionNonStreaming(TypedDict):
+    object: Literal["chat.completion"]
+    choices: list[ChoiceNonStreaming]
     usage: Usage
-    choices: list[Choices]
+
+
+class ChatCompletionStreaming(ChatCompletionBase):
+    object: Literal["chat.completion.chunk"]
+    choices: list[ChoiceStreaming]
 
 
 async def do_query_streaming(message: str) -> AsyncGenerator[str, None]:
-    for resp in openai.ChatCompletion.create(
+    for response in openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
@@ -43,10 +62,13 @@ async def do_query_streaming(message: str) -> AsyncGenerator[str, None]:
         ],
         stream=True,
     ):
-        if "content" in resp.choices[0].delta:
-            yield resp.choices[0].delta.content
+        response = cast(ChatCompletionStreaming, response)
+        print(response)
+        if "content" in response["choices"][0]["delta"]:
+            yield response["choices"][0]["delta"]["content"]
         else:
-            yield ""
+            print(response["choices"][0])
+            yield "."
 
 
 def do_query(message: str) -> str:
@@ -58,9 +80,5 @@ def do_query(message: str) -> str:
         ],
     )
 
-    res: ChatCompletion = response.to_dict()
-    res["usage"] = res["usage"].to_dict()
-    res["choices"] = [choice.to_dict() for choice in res["choices"]]
-
-    print(res)
-    return res["choices"][0]["message"]["content"]
+    response = cast(ChatCompletionNonStreaming, response)
+    return response["choices"][0]["message"]["content"]
