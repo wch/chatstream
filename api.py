@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import AsyncGenerator, AsyncIterator, Literal, TypedDict
+from typing import AsyncGenerator, AsyncIterator, Callable, Literal, TypedDict
 
 import keys
 import openai
@@ -14,7 +14,7 @@ class Usage(TypedDict):
     total_tokens: int
 
 
-class Message(TypedDict):
+class ChatMessage(TypedDict):
     content: str
     role: str
 
@@ -29,7 +29,7 @@ class ChoiceBase(TypedDict):
 
 
 class ChoiceNonStreaming(ChoiceBase):
-    message: Message
+    message: ChatMessage
 
 
 class ChoiceStreaming(ChoiceBase):
@@ -53,25 +53,55 @@ class ChatCompletionStreaming(ChatCompletionBase):
     choices: list[ChoiceStreaming]
 
 
+class ChatSession:
+    def __init__(self) -> None:
+        self.model = "gpt-3.5-turbo"
+        self.messages: list[ChatMessage] = [
+            {"role": "system", "content": "You are a helpful assistant."},
+        ]
+
+    def streaming_query(self, message: str) -> StreamingQuery:
+        self.messages.append({"role": "user", "content": message})
+        streaming_query = StreamingQuery(self.model, self.messages)
+        streaming_query.set_stop_iteration_callback(
+            lambda x: self.messages.append(x.collapse_all_responses())
+        )
+        return streaming_query
+
+
 class StreamingQuery:
-    def __init__(self, message: str) -> None:
-        self.message = message
+    def __init__(self, model: str, messages: list[ChatMessage]) -> None:
+        self.model = model
+        self.messages = messages
+
         self.initialized = False
         self.stream: AsyncGenerator[ChatCompletionStreaming, None]
         self.all_responses: list[ChatCompletionStreaming] = []
         self.all_response_text: str = ""
+        self.stop_iteration_callback: Callable[[StreamingQuery], None] = lambda x: None
 
-    async def ensure_initialized(self) -> None:
+    def set_stop_iteration_callback(
+        self, callback: Callable[[StreamingQuery], None]
+    ) -> None:
+        self.stop_iteration_callback = callback
+
+    def collapse_all_responses(self) -> ChatMessage:
+        res: ChatMessage = {"role": "", "content": ""}
+
+        for response in self.all_responses:
+            for key, value in response["choices"][0]["delta"].items():
+                res[key] += value
+
+        return res
+
+    async def _ensure_initialized(self) -> None:
         # This initializes the stream using the async .acreate() method. It would be
         # nice to do this in __init__, but that won't work because __init__ must be
         # synchronous.
         if not self.initialized:
             self.stream = await openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": self.message},
-                ],
+                model=self.model,
+                messages=self.messages,
                 stream=True,
             )
             self.initialized = True
@@ -80,9 +110,13 @@ class StreamingQuery:
         return self
 
     async def __anext__(self) -> ChatCompletionStreaming:
-        await self.ensure_initialized()
+        await self._ensure_initialized()
 
-        response: ChatCompletionStreaming = await self.stream.__anext__()
+        try:
+            response: ChatCompletionStreaming = await self.stream.__anext__()
+        except StopAsyncIteration:
+            self.stop_iteration_callback(self)
+            raise StopAsyncIteration
 
         self.all_responses.append(response)
         if "content" in response["choices"][0]["delta"]:

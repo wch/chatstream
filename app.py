@@ -33,6 +33,8 @@ app_ui = ui.page_fluid(
 
 
 def server(input: Inputs, output: Outputs, session: Session):
+    chat_session = api.ChatSession()
+
     # Put the string in a list so that we can mutate it.
     chat_string: list[str] = [""]
 
@@ -49,7 +51,9 @@ def server(input: Inputs, output: Outputs, session: Session):
         chat_string[0] = ""
 
         # Launch a task that updates the chat string asynchronously.
-        asyncio.Task(set_val_streaming(chat_string, api.StreamingQuery(input.query())))
+        asyncio.Task(
+            set_val_streaming(chat_string, chat_session.streaming_query(input.query()))
+        )
 
         # This version does the the same, but without streaming. It usually results in
         # a long pause, and then the entire response is displayed at once.
