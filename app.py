@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import AsyncIterator
 
 import api
 
@@ -40,7 +39,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     def chat_string_size() -> int:
         return len(chat_string[0])
 
-    @reactive.poll(chat_string_size, 0.04)
+    @reactive.poll(chat_string_size, 0.03)
     def current_chat_string() -> str:
         return chat_string[0]
 
@@ -65,7 +64,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 app = App(app_ui, server)
 
 
-async def set_val_streaming(v: list[str], stream: AsyncIterator[str]) -> None:
+async def set_val_streaming(v: list[str], stream: api.StreamingQuery) -> None:
     """
     Given an async generator that returns strings, append each string and to an
     accumulator string.
@@ -77,9 +76,9 @@ async def set_val_streaming(v: list[str], stream: AsyncIterator[str]) -> None:
         so that the string can be mutated.
 
     stream
-        An async generator that yields strings.
+        An api.StreamingQuery object.
     """
-    async for token in stream:
-        v[0] += token
+    async for _ in stream:
+        v[0] = stream.all_response_text
         # Need to sleep so that this will yield and allow reactive stuff to run.
         await asyncio.sleep(0)

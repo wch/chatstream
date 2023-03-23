@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import AsyncGenerator, AsyncIterator, Literal, TypedDict, cast
+from typing import AsyncGenerator, AsyncIterator, Literal, TypedDict
 
 import keys
 import openai
@@ -56,36 +56,54 @@ class ChatCompletionStreaming(ChatCompletionBase):
 class StreamingQuery:
     def __init__(self, message: str) -> None:
         self.message = message
-        self.stream = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": message},
-            ],
-            stream=True,
-        )
+        self.initialized = False
+        self.stream: AsyncGenerator[ChatCompletionStreaming, None]
+        self.all_responses: list[ChatCompletionStreaming] = []
+        self.all_response_text: str = ""
 
-    def __aiter__(self) -> AsyncIterator[str]:
+    async def ensure_initialized(self) -> None:
+        # This initializes the stream using the async .acreate() method. It would be
+        # nice to do this in __init__, but that won't work because __init__ must be
+        # synchronous.
+        if not self.initialized:
+            self.stream = await openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": self.message},
+                ],
+                stream=True,
+            )
+            self.initialized = True
+
+    def __aiter__(self) -> AsyncIterator[ChatCompletionStreaming]:
         return self
 
-    async def __anext__(self) -> str:
-        response = cast(ChatCompletionStreaming, next(self.stream))
+    async def __anext__(self) -> ChatCompletionStreaming:
+        await self.ensure_initialized()
+
+        response: ChatCompletionStreaming = await self.stream.__anext__()
+
+        self.all_responses.append(response)
         if "content" in response["choices"][0]["delta"]:
-            return response["choices"][0]["delta"]["content"]
-        else:
-            return ""
+            self.all_response_text += response["choices"][0]["delta"]["content"]
+
+        return response
 
 
 async def do_query_streaming(message: str) -> AsyncGenerator[str, None]:
-    for response in openai.ChatCompletion.create(
+    chat_completion: AsyncGenerator[
+        ChatCompletionStreaming, None
+    ] = await openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": message},
         ],
         stream=True,
-    ):
-        response = cast(ChatCompletionStreaming, response)
+    )
+
+    async for response in chat_completion:
         if "content" in response["choices"][0]["delta"]:
             yield response["choices"][0]["delta"]["content"]
         else:
@@ -93,7 +111,7 @@ async def do_query_streaming(message: str) -> AsyncGenerator[str, None]:
 
 
 def do_query(message: str) -> str:
-    response = openai.ChatCompletion.create(
+    response: ChatCompletionNonStreaming = openai.ChatCompletion.create(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
         model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
@@ -101,5 +119,4 @@ def do_query(message: str) -> str:
         ],
     )
 
-    response = cast(ChatCompletionNonStreaming, response)
     return response["choices"][0]["message"]["content"]
