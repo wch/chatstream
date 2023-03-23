@@ -63,12 +63,10 @@ async def do_query_streaming(message: str) -> AsyncGenerator[str, None]:
         stream=True,
     ):
         response = cast(ChatCompletionStreaming, response)
-        print(response)
         if "content" in response["choices"][0]["delta"]:
             yield response["choices"][0]["delta"]["content"]
         else:
-            print(response["choices"][0])
-            yield "."
+            yield ""
 
 
 def do_query(message: str) -> str:
