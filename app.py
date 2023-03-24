@@ -8,6 +8,9 @@ from htmltools import Tag
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 
 app_ui = ui.page_fluid(
+    ui.head_content(
+        ui.tags.title("Shiny ChatGPT"),
+    ),
     ui.tags.style(
         """
     textarea {
@@ -20,7 +23,7 @@ app_ui = ui.page_fluid(
     }
     """
     ),
-    "Shiny ChatGPT",
+    ui.h6("Shiny ChatGPT"),
     ui.output_ui("previous_conversation"),
     ui.output_ui("current_response"),
     ui.input_text_area(
