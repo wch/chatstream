@@ -16,7 +16,7 @@ class Usage(TypedDict):
 
 class ChatMessage(TypedDict):
     content: str
-    role: str
+    role: Literal["system", "user", "assistant"]
 
 
 class ChoiceDelta(TypedDict):
@@ -62,10 +62,15 @@ class ChatSession:
 
     def streaming_query(self, message: str) -> StreamingQuery:
         self.messages.append({"role": "user", "content": message})
+
         streaming_query = StreamingQuery(self.model, self.messages)
+
+        # When the streaming query finishes, collapse the query responses and append to
+        # self.messages.
         streaming_query.set_stop_iteration_callback(
             lambda x: self.messages.append(x.collapse_all_responses())
         )
+
         return streaming_query
 
 
@@ -86,7 +91,10 @@ class StreamingQuery:
         self.stop_iteration_callback = callback
 
     def collapse_all_responses(self) -> ChatMessage:
-        res: ChatMessage = {"role": "", "content": ""}
+        res: ChatMessage = {
+            "role": "",  # pyright: ignore[reportGeneralTypeIssues]
+            "content": "",
+        }
 
         for response in self.all_responses:
             for key, value in response["choices"][0]["delta"].items():
