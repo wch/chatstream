@@ -48,43 +48,69 @@ app_ui = ui.page_fluid(
 def server(input: Inputs, output: Outputs, session: Session):
     chat_session = api.ChatSession()
 
+    streaming_chat_string_rv = reactive.Value("")
     # This is set to True when we're streaming the response from the API.
-    is_streaming_flag = reactive.Value(False)
+    is_streaming_rv = reactive.Value(False)
 
     # Put the string in a dict so that we can mutate it.
-    streaming_chat_string: dict[str, str] = {"value": ""}
-
-    def chat_string_size() -> int:
-        return len(streaming_chat_string["value"])
-
-    @reactive.poll(chat_string_size, 0.1)
-    def current_chat_string() -> str:
-        return streaming_chat_string["value"]
+    streaming_chat_string: list[str] = [""]
+    is_streaming: list[bool] = [False]
 
     @reactive.Effect
     @reactive.event(input.ask)
     def _():
         ui.update_text_area("query", value="")
-        streaming_chat_string["value"] = ""
+        streaming_chat_string[0] = ""
 
         # Launch a Task that updates the chat string asynchronously.
         asyncio.Task(
             set_val_streaming(
                 streaming_chat_string,
                 chat_session.streaming_query(input.query()),
-                is_streaming_flag,
+                is_streaming,
             )
         )
 
-        # This version does the the same, but without streaming. It usually results in
-        # a long pause, and then the entire response is displayed at once.
-        # chat_string.set(api.do_query(input.query()))
+        # Set both is_streaming[0] and is_streaming_rv to True here, instead of letting
+        # set_val_streaming set is_streaming[0]=True in the Task, because:
+        # - We want to set is_streaming_rv() to True to kick off the polling loop with
+        #   the reactive.Effect.
+        # - The Task might not set is_streaming[0]=True right away, and if it doesn't,
+        #   then the polling loop will be confused and think that we've stopped
+        #   streaming when in fact we're just starting. Effect to see the
+        is_streaming[0] = True
+        is_streaming_rv.set(True)
+
+    # The purpose of this Effect is to poll the non-reactive variables is_streaming[0]
+    # and streaming_chat_string[0], and update the corresponding reactive variables
+    # is_streaming_rv and streaming_chat_string_rv.
+    #
+    # This is necessary for two reasons:
+    # 1. The Task that does the streaming cannot set reactive.Values directly and have
+    #    them work properly. This is because if the reactive.Value is set from a
+    #    different Task, it will not properly trigger a flush in this Task. (I think.)
+    # 2. This stuff is done with an Effect and reactive.Values instead of a
+    #    reactive.poll, because I want the polling to only happen when needed (when
+    #    streaming), which is not possible with a reactive.poll.
+    #
+    # The reason for not wanting to poll all the time is (1) it's not always necessary,
+    # and (2) each polling event triggers a reactive flush, and each time a flush
+    # happens, it sends a busy/idle signal to the client. If we poll frequently, this is
+    # a lot of busy/idle signals. (It would be nice if we could do reactive polling
+    # without the busy/idle signals, but that's not possible right now.)
+    @reactive.Effect
+    def _():
+        if is_streaming_rv():
+            reactive.invalidate_later(0.05)
+
+        is_streaming_rv.set(is_streaming[0])
+        streaming_chat_string_rv.set(streaming_chat_string[0])
 
     @output
     @render.ui
     def previous_conversation():
-        # This render.ui should be run only when the is_streaming_flag changes values.
-        is_streaming_flag()
+        # This render.ui should be run only when the is_streaming_rv() changes values.
+        is_streaming_rv()
 
         messages_md = chat_session.messages
         messages_html: list[Tag] = []
@@ -110,23 +136,23 @@ def server(input: Inputs, output: Outputs, session: Session):
     @output
     @render.ui
     def current_response():
-        if is_streaming_flag() is False:
+        if not is_streaming_rv():
             return ui.div()
 
         css_style = "border: 1px solid #999999; border-radius: 4px; padding: 5px; margin-top: 10px; background-color: #f8f8f8;"
         return ui.div(
             {"style": css_style},
-            ui.markdown(current_chat_string()),
+            ui.markdown(streaming_chat_string_rv()),
         )
 
 
-app = App(app_ui, server)
+app = App(app_ui, server, debug=True)
 
 
 async def set_val_streaming(
-    v: dict[str, str],
+    v: list[str],
     stream: api.StreamingQuery,
-    is_streaming_flag: reactive.Value[bool],
+    is_streaming: list[bool],
 ) -> None:
     """
     Given an async generator that returns strings, append each string and to an
@@ -141,16 +167,16 @@ async def set_val_streaming(
     stream
         An api.StreamingQuery object.
 
-    is_streaming_flag
-        A reactive.Value that is set to True when we're streaming the response, then
-        back to False when we're done.
+    is_streaming
+        A one-element list containing a boolean that is set to True when we're streaming
+        the response, then back to False when we're done.
     """
-    is_streaming_flag.set(True)
+    is_streaming[0] = True
 
     try:
         async for _ in stream:
-            v["value"] = stream.all_response_text
+            v[0] = stream.all_response_text
             # Need to sleep so that this will yield and allow reactive stuff to run.
             await asyncio.sleep(0)
     finally:
-        is_streaming_flag.set(False)
+        is_streaming[0] = False
