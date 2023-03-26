@@ -20,10 +20,29 @@ app_ui = ui.page_fluid(
       overflow-y: auto;
     }
     pre, code {
-      background-color: #f0f0f0;
+      background-color: #eeeeee;
     }
     .shiny-html-output p:last-child {
+      /* No space after last paragraph in a message */
       margin-bottom: 0;
+    }
+    .shiny-html-output pre code {
+      /* Fix alignment of first line in a code block */
+      padding: 0;
+    }
+    .user-message {
+      border-radius: 4px;
+      padding: 5px;
+      margin-top: 10px;
+      border: 1px solid #dddddd;
+      background-color: #ffffff;
+    }
+    .assistant-message {
+      border-radius: 4px;
+      padding: 5px;
+      margin-top: 10px;
+      border: 1px solid #dddddd;
+      background-color: #f6f6f6;
     }
     """
     ),
@@ -138,16 +157,13 @@ def server(input: Inputs, output: Outputs, session: Session):
     def session_messages_ui():
         messages_html: list[Tag] = []
         for message in session_messages():
-            css_style = "border-radius: 4px; padding: 5px; margin-top: 10px;"
-            if message["role"] == "user":
-                css_style += "border: 1px solid #dddddd; background-color: #ffffff;"
-            elif message["role"] == "assistant":
-                css_style += "border: 1px solid #999999; background-color: #f8f8f8;"
-            elif message["role"] == "system":
+            if message["role"] == "system":
                 # Don't show system messages.
                 continue
 
-            messages_html.append(ui.div({"style": css_style}, message["content_html"]))
+            messages_html.append(
+                ui.div({"class": message["role"] + "-message"}, message["content_html"])
+            )
 
         return ui.div(*messages_html)
 
@@ -160,9 +176,8 @@ def server(input: Inputs, output: Outputs, session: Session):
         if not is_streaming_rv():
             return ui.div()
 
-        css_style = "border: 1px solid #999999; border-radius: 4px; padding: 5px; margin-top: 10px; background-color: #f8f8f8;"
         return ui.div(
-            {"style": css_style},
+            {"class": "assistant-message"},
             ui.markdown(streaming_chat_string_rv()),
         )
 
