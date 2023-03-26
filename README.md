@@ -39,7 +39,7 @@ pip install rsconnect-python
 Then make sure a server is registered. For example you can register a server named `colorado` with the following command. Note that you can get the API key from your server's web interface.
 
 ```
-rsconnect add -n colorado -s https://colorado.posit.co/rsc/ -k your_api_key
+rsconnect add -n colorado -s https://colorado.posit.co/rsc/ -k rsconnect_api_key
 ```
 
 Finally, deploy the app with the following command:
