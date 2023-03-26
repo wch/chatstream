@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import cast
 
 import api
 from htmltools import Tag
@@ -24,8 +25,8 @@ app_ui = ui.page_fluid(
     """
     ),
     ui.h6("Shiny ChatGPT"),
-    ui.output_ui("previous_conversation"),
-    ui.output_ui("current_response"),
+    ui.output_ui("session_messages_ui"),
+    ui.output_ui("current_streaming_message"),
     ui.input_text_area(
         "query",
         None,
@@ -48,13 +49,17 @@ app_ui = ui.page_fluid(
 def server(input: Inputs, output: Outputs, session: Session):
     chat_session = api.ChatSession()
 
-    streaming_chat_string_rv = reactive.Value("")
+    # The current streaming chat string. It's in a list so that we can mutate it.
+    streaming_chat_string: list[str] = [""]
     # This is set to True when we're streaming the response from the API.
+    is_streaming: list[bool] = [False]
+
+    # These are reactive.Values that mirror the values above. The mirroring is done with
+    # a reactive.Effect. The purpose of these is to trigger reactive stuff to happen.
+    streaming_chat_string_rv = reactive.Value("")
     is_streaming_rv = reactive.Value(False)
 
-    # Put the string in a dict so that we can mutate it.
-    streaming_chat_string: list[str] = [""]
-    is_streaming: list[bool] = [False]
+    session_messages: reactive.Value[list[ChatMessageWithHtml]] = reactive.Value([])
 
     @reactive.Effect
     @reactive.event(input.ask)
@@ -62,7 +67,10 @@ def server(input: Inputs, output: Outputs, session: Session):
         ui.update_text_area("query", value="")
         streaming_chat_string[0] = ""
 
-        # Launch a Task that updates the chat string asynchronously.
+        # Launch a Task that updates the chat string asynchronously. We run this in a
+        # separate task so that the data can come in without need to await it in this
+        # Task (which would block other computation to happen, like running reactive
+        # stuff).
         asyncio.Task(
             set_val_streaming(
                 streaming_chat_string,
@@ -106,15 +114,27 @@ def server(input: Inputs, output: Outputs, session: Session):
         is_streaming_rv.set(is_streaming[0])
         streaming_chat_string_rv.set(streaming_chat_string[0])
 
+    # This Effect is used to get the most recent completed message from the chat
+    # session, convert it to HTML, and store it in session_messages.
+    @reactive.Effect
+    @reactive.event(is_streaming_rv)
+    def _():
+        # If we get here, we need to add the most recent message from chat_session to
+        # session_messages.
+        last_message = cast(ChatMessageWithHtml, chat_session.messages[-1].copy())
+        last_message["content_html"] = ui.markdown(last_message["content"])
+
+        # Update session_messages. We need to make a copy to trigger a reactive
+        # invalidation.
+        session_messages2 = session_messages.get().copy()
+        session_messages2.append(last_message)
+        session_messages.set(session_messages2)
+
     @output
     @render.ui
-    def previous_conversation():
-        # This render.ui should be run only when the is_streaming_rv() changes values.
-        is_streaming_rv()
-
-        messages_md = chat_session.messages
+    def session_messages_ui():
         messages_html: list[Tag] = []
-        for message in messages_md:
+        for message in session_messages():
             css_style = "border-radius: 4px; padding: 5px; margin-top: 10px;"
             if message["role"] == "user":
                 css_style += "border: 1px solid #dddddd; background-color: #ffffff;"
@@ -124,18 +144,16 @@ def server(input: Inputs, output: Outputs, session: Session):
                 # Don't show system messages.
                 continue
 
-            messages_html.append(
-                ui.div(
-                    {"style": css_style},
-                    ui.markdown(message["content"]),
-                )
-            )
+            messages_html.append(ui.div({"style": css_style}, message["content"]))
 
         return ui.div(*messages_html)
 
     @output
     @render.ui
-    def current_response():
+    def current_streaming_message():
+        # Only display this content while streaming. Once the streaming is done, this
+        # content will disappear and an identical-looking one will be added to the
+        # `session_messages_ui` output.
         if not is_streaming_rv():
             return ui.div()
 
@@ -147,6 +165,14 @@ def server(input: Inputs, output: Outputs, session: Session):
 
 
 app = App(app_ui, server, debug=True)
+
+# ======================================================================================
+
+
+# A customized version of ChatMessage, with a field for the Markdown `content` converted
+# to HTML.
+class ChatMessageWithHtml(api.ChatMessage):
+    content_html: str
 
 
 async def set_val_streaming(
