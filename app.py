@@ -167,7 +167,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         )
 
 
-app = App(app_ui, server, debug=True)
+app = App(app_ui, server)
 
 # ======================================================================================
 
