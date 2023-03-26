@@ -22,6 +22,9 @@ app_ui = ui.page_fluid(
     pre, code {
       background-color: #f0f0f0;
     }
+    .shiny-html-output p:last-child {
+      margin-bottom: 0;
+    }
     """
     ),
     ui.h6("Shiny ChatGPT"),
