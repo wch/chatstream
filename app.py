@@ -144,7 +144,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 # Don't show system messages.
                 continue
 
-            messages_html.append(ui.div({"style": css_style}, message["content"]))
+            messages_html.append(ui.div({"style": css_style}, message["content_html"]))
 
         return ui.div(*messages_html)
 
