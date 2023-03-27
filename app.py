@@ -206,7 +206,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.Effect
     def _():
         if is_streaming_rv():
-            reactive.invalidate_later(0.05)
+            reactive.invalidate_later(0.1)
 
         is_streaming_rv.set(is_streaming[0])
         streaming_chat_string_rv.set(streaming_chat_string[0])
