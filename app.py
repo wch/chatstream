@@ -61,6 +61,15 @@ document.addEventListener("keydown", function(e) {
 });
 """
 
+tooltip_init_js = """
+var tooltipTriggerList = [].slice.call(
+  document.querySelectorAll('[data-bs-toggle="tooltip"]')
+);
+var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+  return new bootstrap.Tooltip(tooltipTriggerEl);
+});
+"""
+
 app_ui = ui.page_fluid(
     ui.row(
         ui.div(
@@ -91,9 +100,21 @@ app_ui = ui.page_fluid(
                 ui.h4("Shiny ChatGPT"),
                 ui.hr(),
                 ui.p("Model: gpt-3.5-turbo"),
-                # ui.input_slider(
-                #     "temperature", "Temperature", min=0, max=2, value=1, step=0.1
-                # ),
+                ui.input_slider(
+                    "temperature",
+                    ui.span(
+                        "Temperature",
+                        {
+                            "data-bs-toggle": "tooltip",
+                            "data-bs-placement": "left",
+                            "title": "Lower values are more deterministic. Higher values are more random and unpredictable.",
+                        },
+                    ),
+                    min=0,
+                    max=1,
+                    value=0.7,
+                    step=0.05,
+                ),
                 ui.hr(),
                 ui.p(ui.h5("Export conversation")),
                 ui.input_radio_buttons(
@@ -113,7 +134,9 @@ app_ui = ui.page_fluid(
                 ),
             ),
         ),
-    )
+    ),
+    # Initialize the tooltips at the bottom of the page (after the content is in the DOM)
+    ui.tags.script(tooltip_init_js),
 )
 
 
@@ -147,7 +170,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 streaming_chat_string,
                 chat_session.streaming_query(
                     input.query(),
-                    # temperature=input.temperature(),
+                    temperature=input.temperature(),
                 ),
                 is_streaming,
             )
