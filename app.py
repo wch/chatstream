@@ -44,32 +44,13 @@ pre, code {
 """
 
 app_ui = ui.page_fluid(
-    ui.layout_sidebar(
-        ui.panel_sidebar(
-            ui.panel_well(
-                ui.p(ui.tags.b("Download conversation")),
-                ui.input_radio_buttons(
-                    "download_format", None, ["Markdown", "JSON"], inline=True
-                ),
-                ui.div(
-                    ui.download_button("download_conversation", "Download"),
-                ),
-            ),
-            ui.p(
-                {"style": "margin-top: 10px;"},
-                ui.a(
-                    "Source code",
-                    href="https://github.com/wch/shiny-openai-chat",
-                    target="_blank",
-                ),
-            ),
-        ),
-        ui.panel_main(
+    ui.row(
+        ui.div(
+            {"class": "col-sm-9"},
             ui.head_content(
                 ui.tags.title("Shiny ChatGPT"),
                 ui.tags.style(page_css),
             ),
-            ui.h6("Shiny ChatGPT"),
             ui.output_ui("session_messages_ui"),
             ui.output_ui("current_streaming_message"),
             ui.input_text_area(
@@ -80,6 +61,36 @@ app_ui = ui.page_fluid(
                 width="100%",
             ),
             ui.input_action_button("ask", "Ask"),
+            ),
+        ),
+        ui.div(
+            {"class": "col-sm-3 bg-light"},
+            ui.div(
+                {"class": "sticky-sm-top", "style": "top: 15px;"},
+                ui.h4("Shiny ChatGPT"),
+                ui.hr(),
+                ui.p("Model: gpt-3.5-turbo"),
+                # ui.input_slider(
+                #     "temperature", "Temperature", min=0, max=2, value=1, step=0.1
+                # ),
+                ui.hr(),
+                ui.p(ui.h5("Export conversation")),
+                ui.input_radio_buttons(
+                    "download_format", None, ["Markdown", "JSON"], inline=True
+                ),
+                ui.div(
+                    ui.download_button("download_conversation", "Download"),
+                ),
+                ui.hr(),
+                ui.p(
+                    {"style": "margin-top: 10px;"},
+                    ui.a(
+                        "Source code",
+                        href="https://github.com/wch/shiny-openai-chat",
+                        target="_blank",
+                    ),
+                ),
+            ),
         ),
     )
 )
@@ -113,7 +124,10 @@ def server(input: Inputs, output: Outputs, session: Session):
         asyncio.Task(
             set_val_streaming(
                 streaming_chat_string,
-                chat_session.streaming_query(input.query()),
+                chat_session.streaming_query(
+                    input.query(),
+                    # temperature=input.temperature(),
+                ),
                 is_streaming,
             )
         )
