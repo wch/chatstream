@@ -1,70 +1,87 @@
 from __future__ import annotations
 
 import asyncio
-from typing import cast
+import json
+from datetime import datetime
+from typing import Generator, Sequence, cast
 
 import api
 from htmltools import Tag
 
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 
+page_css = """
+textarea {
+    margin-top: 10px;
+    resize: vertical;
+    overflow-y: auto;
+}
+pre, code {
+    background-color: #eeeeee;
+}
+.shiny-html-output p:last-child {
+    /* No space after last paragraph in a message */
+    margin-bottom: 0;
+}
+.shiny-html-output pre code {
+    /* Fix alignment of first line in a code block */
+    padding: 0;
+}
+.user-message {
+    border-radius: 4px;
+    padding: 5px;
+    margin-top: 10px;
+    border: 1px solid #dddddd;
+    background-color: #ffffff;
+}
+.assistant-message {
+    border-radius: 4px;
+    padding: 5px;
+    margin-top: 10px;
+    border: 1px solid #dddddd;
+    background-color: #f6f6f6;
+}
+"""
+
 app_ui = ui.page_fluid(
-    ui.head_content(
-        ui.tags.title("Shiny ChatGPT"),
-    ),
-    ui.tags.style(
-        """
-    textarea {
-      margin-top: 10px;
-      resize: vertical;
-      overflow-y: auto;
-    }
-    pre, code {
-      background-color: #eeeeee;
-    }
-    .shiny-html-output p:last-child {
-      /* No space after last paragraph in a message */
-      margin-bottom: 0;
-    }
-    .shiny-html-output pre code {
-      /* Fix alignment of first line in a code block */
-      padding: 0;
-    }
-    .user-message {
-      border-radius: 4px;
-      padding: 5px;
-      margin-top: 10px;
-      border: 1px solid #dddddd;
-      background-color: #ffffff;
-    }
-    .assistant-message {
-      border-radius: 4px;
-      padding: 5px;
-      margin-top: 10px;
-      border: 1px solid #dddddd;
-      background-color: #f6f6f6;
-    }
-    """
-    ),
-    ui.h6("Shiny ChatGPT"),
-    ui.output_ui("session_messages_ui"),
-    ui.output_ui("current_streaming_message"),
-    ui.input_text_area(
-        "query",
-        None,
-        # value="Tell me about yourself.",
-        # placeholder="Ask me anything...",
-        width="100%",
-    ),
-    ui.input_action_button("ask", "Ask"),
-    ui.p(
-        {"style": "margin-top: 10px;"},
-        ui.a(
-            "Source code",
-            href="https://github.com/wch/shiny-openai-chat",
-            target="_blank",
+    ui.layout_sidebar(
+        ui.panel_sidebar(
+            ui.panel_well(
+                ui.p(ui.tags.b("Download conversation")),
+                ui.input_radio_buttons(
+                    "download_format", None, ["Markdown", "JSON"], inline=True
+                ),
+                ui.div(
+                    ui.download_button("download_conversation", "Download"),
+                ),
+            ),
+            ui.p(
+                {"style": "margin-top: 10px;"},
+                ui.a(
+                    "Source code",
+                    href="https://github.com/wch/shiny-openai-chat",
+                    target="_blank",
+                ),
+            ),
         ),
-    ),
+        ui.panel_main(
+            ui.head_content(
+                ui.tags.title("Shiny ChatGPT"),
+                ui.tags.style(page_css),
+            ),
+            ui.h6("Shiny ChatGPT"),
+            ui.output_ui("session_messages_ui"),
+            ui.output_ui("current_streaming_message"),
+            ui.input_text_area(
+                "query",
+                None,
+                # value="Tell me about yourself.",
+                # placeholder="Ask me anything...",
+                width="100%",
+            ),
+            ui.input_action_button("ask", "Ask"),
+        ),
+    )
 )
 
 
@@ -181,6 +198,26 @@ def server(input: Inputs, output: Outputs, session: Session):
             ui.markdown(streaming_chat_string_rv()),
         )
 
+    def download_conversation_filename() -> str:
+        if input.download_format() == "JSON":
+            ext = "json"
+        else:
+            ext = "md"
+        return f"conversation-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.{ext}"
+
+    @session.download(filename=download_conversation_filename)
+    def download_conversation() -> Generator[str, None, None]:
+        res: list[dict[str, str]] = []
+        if input.download_format() == "JSON":
+            for message in session_messages():
+                # Copy over `role` and `content`, but not `content_html`.
+                message_copy = {"role": message["role"], "content": message["content"]}
+                res.append(message_copy)
+            yield json.dumps(res, indent=2)
+
+        else:
+            yield chat_messages_to_md(session_messages())
+
 
 app = App(app_ui, server)
 
@@ -224,3 +261,31 @@ async def set_val_streaming(
             await asyncio.sleep(0)
     finally:
         is_streaming[0] = False
+
+
+def chat_messages_to_md(messages: Sequence[api.ChatMessage]) -> str:
+    """
+    Convert a list of ChatMessage objects to a Markdown string.
+
+    Parameters
+    ----------
+    messages
+        A list of ChatMessageobjects.
+
+    Returns
+    -------
+    str
+        A Markdown string representing the conversation.
+    """
+    res = ""
+
+    for message in messages:
+        if message["role"] == "system":
+            # Don't show system messages.
+            continue
+
+        res += f"## {message['role'].capitalize()}\n\n"
+        res += message["content"]
+        res += "\n\n"
+
+    return res
