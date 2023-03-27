@@ -83,10 +83,18 @@ class ChatSession:
             {"role": "system", "content": "You are a helpful assistant."},
         ]
 
-    def streaming_query(self, message: str) -> StreamingQuery:
+    def streaming_query(
+        self,
+        message: str,
+        temperature: float | None = None,
+    ) -> StreamingQuery:
         self.messages.append({"role": "user", "content": message})
 
-        streaming_query = StreamingQuery(self.model, self.messages)
+        streaming_query = StreamingQuery(
+            self.model,
+            self.messages,
+            temperature=temperature,
+        )
 
         # When the streaming query finishes, collapse the query responses and append to
         # self.messages.
@@ -98,9 +106,15 @@ class ChatSession:
 
 
 class StreamingQuery:
-    def __init__(self, model: str, messages: list[ChatMessage]) -> None:
+    def __init__(
+        self,
+        model: str,
+        messages: list[ChatMessage],
+        temperature: float | None = None,
+    ) -> None:
         self.model = model
         self.messages = messages
+        self.temperature: float | None = temperature
 
         self.initialized = False
         self.stream: AsyncGenerator[ChatCompletionStreaming, None]
@@ -130,10 +144,15 @@ class StreamingQuery:
         # nice to do this in __init__, but that won't work because __init__ must be
         # synchronous.
         if not self.initialized:
+            opt_args = {}
+            if self.temperature is not None:
+                opt_args["temperature"] = self.temperature
+
             self.stream = await openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
                 model=self.model,
                 messages=self.messages,
                 stream=True,
+                **opt_args,
             )
             self.initialized = True
 
