@@ -125,7 +125,10 @@ app_ui = ui.page_fluid(
                 ),
                 ui.hr(),
                 ui.p(
-                    {"style": "margin-top: 10px;"},
+                    "Built with ",
+                    ui.a("Shiny for Python", href="https://shiny.rstudio.com/py/"),
+                ),
+                ui.p(
                     ui.a(
                         "Source code",
                         href="https://github.com/wch/shiny-openai-chat",
