@@ -79,7 +79,9 @@ app_ui = ui.page_fluid(
                 # placeholder="Ask me anything...",
                 width="100%",
             ),
-            ui.input_action_button("ask", "Ask"),
+            ui.div(
+                {"style": "width: 100%; text-align: right;"},
+                ui.input_action_button("ask", "Ask"),
             ),
         ),
         ui.div(
