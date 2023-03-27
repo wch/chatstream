@@ -43,6 +43,24 @@ pre, code {
 }
 """
 
+# When the user presses Enter inside the query textarea, trigger a click on the "ask"
+# button. We also have to trigger a "change" event on the textarea just before that,
+# because otherwise Shiny will debounce changes to the value in the textarea, and the
+# value may not be updated before the "ask" button click event happens.
+page_js = """
+document.addEventListener("keydown", function(e) {
+  queryTextArea = document.getElementById("query");
+  if (
+    document.activeElement === queryTextArea &&
+    e.code === "Enter" &&
+    !e.shiftKey
+  ) {
+    queryTextArea.dispatchEvent(new Event("change"));
+    document.getElementById("ask").click();
+  }
+});
+"""
+
 app_ui = ui.page_fluid(
     ui.row(
         ui.div(
@@ -50,6 +68,7 @@ app_ui = ui.page_fluid(
             ui.head_content(
                 ui.tags.title("Shiny ChatGPT"),
                 ui.tags.style(page_css),
+                ui.tags.script(page_js),
             ),
             ui.output_ui("session_messages_ui"),
             ui.output_ui("current_streaming_message"),
