@@ -61,6 +61,7 @@ document.addEventListener("keydown", function(e) {
 });
 """
 
+# Code for initializing popper.js tooltips.
 tooltip_init_js = """
 var tooltipTriggerList = [].slice.call(
   document.querySelectorAll('[data-bs-toggle="tooltip"]')
