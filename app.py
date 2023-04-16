@@ -5,10 +5,13 @@ import json
 from datetime import datetime
 from typing import Generator, Sequence, cast
 
-import api
 from htmltools import Tag
-
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
+
+import api
+
+# The delay (in seconds) between the reactive polling events when streaming data.
+STREAM_POLLING_DELAY = 0.1
 
 page_css = """
 textarea {
@@ -210,7 +213,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.Effect
     def _():
         if is_streaming_rv():
-            reactive.invalidate_later(0.1)
+            reactive.invalidate_later(STREAM_POLLING_DELAY)
 
         is_streaming_rv.set(is_streaming[0])
         streaming_chat_string_rv.set(streaming_chat_string[0])
