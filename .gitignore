@@ -2,3 +2,4 @@ __pycache__/
 *.py[cod]
 keys.py
 .DS_Store
+/venv/
