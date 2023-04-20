@@ -58,6 +58,7 @@ document.addEventListener("keydown", function(e) {
     e.code === "Enter" &&
     !e.shiftKey
   ) {
+    event.preventDefault();
     queryTextArea.dispatchEvent(new Event("change"));
     document.getElementById("ask").click();
   }
