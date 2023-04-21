@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 from datetime import datetime
-from typing import Generator, Sequence, cast
+from typing import AsyncGenerator, Awaitable, Generator, Sequence, TypeVar, cast
 
+import openai
 from htmltools import Tag
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 
@@ -12,6 +14,7 @@ import api
 
 # The delay (in seconds) between the reactive polling events when streaming data.
 STREAM_POLLING_DELAY = 0.1
+
 
 page_css = """
 textarea {
@@ -89,7 +92,7 @@ app_ui = ui.page_fluid(
             ui.input_text_area(
                 "query",
                 None,
-                # value="Tell me about yourself.",
+                # value="2+2",
                 # placeholder="Ask me anything...",
                 width="100%",
             ),
@@ -147,93 +150,107 @@ app_ui = ui.page_fluid(
     ui.tags.script(tooltip_init_js),
 )
 
+# ======================================================================================
+
+T = TypeVar("T")
+
+
+# A customized version of ChatMessage, with a field for the Markdown `content` converted
+# to HTML.
+class ChatMessageWithHtml(api.ChatMessage):
+    content_html: str
+
 
 def server(input: Inputs, output: Outputs, session: Session):
-    chat_session = api.ChatSession()
+    # chat_session = api.ChatSession()
 
-    # The current streaming chat string. It's in a list so that we can mutate it.
-    streaming_chat_string: list[str] = [""]
-    # This is set to True when we're streaming the response from the API.
-    is_streaming: list[bool] = [False]
+    # This contains each piece of the chat session when a streaming response is coming
+    # in. When that's not happening, it is set to None.
+    streaming_chat_piece: reactive.Value[
+        api.ChatCompletionStreaming | None
+    ] = reactive.Value(None)
 
-    # These are reactive.Values that mirror the values above. The mirroring is done with
-    # a reactive.Effect. The purpose of these is to trigger reactive stuff to happen.
-    streaming_chat_string_rv = reactive.Value("")
-    is_streaming_rv = reactive.Value(False)
+    # This is the current streaming chat string. While streaming it is a string; when
+    # not streaming, it is None.
+    streaming_chat_string: reactive.Value[str | None] = reactive.Value(None)
 
-    session_messages: reactive.Value[list[ChatMessageWithHtml]] = reactive.Value([])
+    session_messages: reactive.Value[list[ChatMessageWithHtml]] = reactive.Value(
+        [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant.",
+                "content_html": "",
+            }
+        ]
+    )
+
+    @reactive.Effect
+    @reactive.event(streaming_chat_piece)
+    def _():
+        piece = streaming_chat_piece()
+        if piece is None:
+            return
+
+        # If we got here, we know that streaming_chat_string is not None.
+        current_chat_string = cast(str, streaming_chat_string())
+
+        if piece["choices"][0]["finish_reason"] == "stop":
+            # # If we get here, we need to add the most recent message from chat_session to
+            # # session_messages.
+            # last_message = cast(ChatMessageWithHtml, chat_session.messages[-1].copy())
+            # last_message["content_html"] = ui.markdown(last_message["content"])
+
+            # Update session_messages. We need to make a copy to trigger a reactive
+            # invalidation.
+            last_message: ChatMessageWithHtml = {
+                "content": current_chat_string,
+                "role": "assistant",
+                "content_html": ui.markdown(current_chat_string),
+            }
+            session_messages2 = session_messages.get().copy()
+            session_messages2.append(last_message)
+            session_messages.set(session_messages2)
+            streaming_chat_string.set(None)
+            return
+
+        if "content" in piece["choices"][0]["delta"]:
+            streaming_chat_string.set(
+                current_chat_string + piece["choices"][0]["delta"]["content"]
+            )
 
     @reactive.Effect
     @reactive.event(input.ask)
     def _():
         ui.update_text_area("query", value="")
-        streaming_chat_string[0] = ""
+
+        last_message: ChatMessageWithHtml = {
+            "content": input.query(),
+            "role": "user",
+            "content_html": ui.markdown(input.query()),
+        }
+        session_messages2 = session_messages.get().copy()
+        session_messages2.append(last_message)
+        session_messages.set(session_messages2)
+
+        streaming_chat_string.set("")
 
         # Launch a Task that updates the chat string asynchronously. We run this in a
         # separate task so that the data can come in without need to await it in this
         # Task (which would block other computation to happen, like running reactive
         # stuff).
         asyncio.Task(
-            set_val_streaming(
-                streaming_chat_string,
-                chat_session.streaming_query(
-                    input.query(),
-                    temperature=input.temperature(),
+            stream_to_reactive(
+                openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": msg["role"], "content": msg["content"]}
+                        for msg in session_messages()
+                    ],
+                    stream=True,
                 ),
-                is_streaming,
+                streaming_chat_piece,
             )
         )
-
-        # Set both is_streaming[0] and is_streaming_rv to True here, instead of letting
-        # set_val_streaming set is_streaming[0]=True in the Task, because:
-        # - We want to set is_streaming_rv() to True to kick off the polling loop with
-        #   the reactive.Effect.
-        # - The Task might not set is_streaming[0]=True right away, and if it doesn't,
-        #   then the polling loop will be confused and think that we've stopped
-        #   streaming when in fact we're just starting. Effect to see the
-        is_streaming[0] = True
-        is_streaming_rv.set(True)
-
-    # The purpose of this Effect is to poll the non-reactive variables is_streaming[0]
-    # and streaming_chat_string[0], and update the corresponding reactive variables
-    # is_streaming_rv and streaming_chat_string_rv.
-    #
-    # This is necessary for two reasons:
-    # 1. The Task that does the streaming cannot set reactive.Values directly and have
-    #    them work properly. This is because if the reactive.Value is set from a
-    #    different Task, it will not properly trigger a flush in this Task. (I think.)
-    # 2. This stuff is done with an Effect and reactive.Values instead of a
-    #    reactive.poll, because I want the polling to only happen when needed (when
-    #    streaming), which is not possible with a reactive.poll.
-    #
-    # The reason for not wanting to poll all the time is (1) it's not always necessary,
-    # and (2) each polling event triggers a reactive flush, and each time a flush
-    # happens, it sends a busy/idle signal to the client. If we poll frequently, this is
-    # a lot of busy/idle signals. (It would be nice if we could do reactive polling
-    # without the busy/idle signals, but that's not possible right now.)
-    @reactive.Effect
-    def _():
-        if is_streaming_rv():
-            reactive.invalidate_later(STREAM_POLLING_DELAY)
-
-        is_streaming_rv.set(is_streaming[0])
-        streaming_chat_string_rv.set(streaming_chat_string[0])
-
-    # This Effect is used to get the most recent completed message from the chat
-    # session, convert it to HTML, and store it in session_messages.
-    @reactive.Effect
-    @reactive.event(is_streaming_rv)
-    def _():
-        # If we get here, we need to add the most recent message from chat_session to
-        # session_messages.
-        last_message = cast(ChatMessageWithHtml, chat_session.messages[-1].copy())
-        last_message["content_html"] = ui.markdown(last_message["content"])
-
-        # Update session_messages. We need to make a copy to trigger a reactive
-        # invalidation.
-        session_messages2 = session_messages.get().copy()
-        session_messages2.append(last_message)
-        session_messages.set(session_messages2)
 
     @output
     @render.ui
@@ -256,12 +273,12 @@ def server(input: Inputs, output: Outputs, session: Session):
         # Only display this content while streaming. Once the streaming is done, this
         # content will disappear and an identical-looking one will be added to the
         # `session_messages_ui` output.
-        if not is_streaming_rv():
+        if streaming_chat_string() is None:
             return ui.div()
 
         return ui.div(
             {"class": "assistant-message"},
-            ui.markdown(streaming_chat_string_rv()),
+            streaming_chat_string(),
         )
 
     def download_conversation_filename() -> str:
@@ -288,45 +305,8 @@ def server(input: Inputs, output: Outputs, session: Session):
 app = App(app_ui, server)
 
 # ======================================================================================
-
-
-# A customized version of ChatMessage, with a field for the Markdown `content` converted
-# to HTML.
-class ChatMessageWithHtml(api.ChatMessage):
-    content_html: str
-
-
-async def set_val_streaming(
-    v: list[str],
-    stream: api.StreamingQuery,
-    is_streaming: list[bool],
-) -> None:
-    """
-    Given an async generator that returns strings, append each string and to an
-    accumulator string.
-
-    Parameters
-    ----------
-    v
-        A one-element list containing the string to update. The list wrapper is needed
-        so that the string can be mutated.
-
-    stream
-        An api.StreamingQuery object.
-
-    is_streaming
-        A one-element list containing a boolean that is set to True when we're streaming
-        the response, then back to False when we're done.
-    """
-    is_streaming[0] = True
-
-    try:
-        async for _ in stream:
-            v[0] = stream.all_response_text
-            # Need to sleep so that this will yield and allow reactive stuff to run.
-            await asyncio.sleep(0)
-    finally:
-        is_streaming[0] = False
+# Utility functions
+# ======================================================================================
 
 
 def chat_messages_to_md(messages: Sequence[api.ChatMessage]) -> str:
@@ -355,3 +335,16 @@ def chat_messages_to_md(messages: Sequence[api.ChatMessage]) -> str:
         res += "\n\n"
 
     return res
+
+
+async def stream_to_reactive(
+    func: AsyncGenerator[T, None] | Awaitable[AsyncGenerator[T, None]],
+    val: reactive.Value[T],
+) -> None:
+    if inspect.isawaitable(func):
+        func = await func  # type: ignore
+    func = cast(AsyncGenerator[T, None], func)
+    async with reactive._core.lock():
+        async for message in func:
+            val.set(message)
+            await reactive.flush()
