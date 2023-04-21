@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import AsyncGenerator, Awaitable, Generator, Sequence, TypeVar, cast
 
 import openai
+import tiktoken
 from htmltools import Tag
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 
@@ -15,6 +16,7 @@ import api
 # The delay (in seconds) between the reactive polling events when streaming data.
 STREAM_POLLING_DELAY = 0.1
 
+OPENAI_MODEL = "gpt-3.5-turbo"
 
 page_css = """
 textarea {
@@ -107,7 +109,7 @@ app_ui = ui.page_fluid(
                 {"class": "sticky-sm-top", "style": "top: 15px;"},
                 ui.h4("Shiny ChatGPT"),
                 ui.hr(),
-                ui.p("Model: gpt-3.5-turbo"),
+                ui.p(f"Model: {OPENAI_MODEL}"),
                 ui.input_slider(
                     "temperature",
                     ui.span(
@@ -157,8 +159,9 @@ T = TypeVar("T")
 
 # A customized version of ChatMessage, with a field for the Markdown `content` converted
 # to HTML.
-class ChatMessageWithHtml(api.ChatMessage):
+class ChatMessageEnriched(api.ChatMessage):
     content_html: str
+    token_count: int
 
 
 def server(input: Inputs, output: Outputs, session: Session):
@@ -174,12 +177,13 @@ def server(input: Inputs, output: Outputs, session: Session):
     # not streaming, it is None.
     streaming_chat_string: reactive.Value[str | None] = reactive.Value(None)
 
-    session_messages: reactive.Value[list[ChatMessageWithHtml]] = reactive.Value(
+    session_messages: reactive.Value[list[ChatMessageEnriched]] = reactive.Value(
         [
             {
                 "role": "system",
                 "content": "You are a helpful assistant.",
                 "content_html": "",
+                "token_count": get_token_count("You are a helpful assistant."),
             }
         ]
     )
@@ -202,10 +206,11 @@ def server(input: Inputs, output: Outputs, session: Session):
 
             # Update session_messages. We need to make a copy to trigger a reactive
             # invalidation.
-            last_message: ChatMessageWithHtml = {
+            last_message: ChatMessageEnriched = {
                 "content": current_chat_string,
                 "role": "assistant",
                 "content_html": ui.markdown(current_chat_string),
+                "token_count": get_token_count(current_chat_string),
             }
             session_messages2 = session_messages.get().copy()
             session_messages2.append(last_message)
@@ -223,10 +228,11 @@ def server(input: Inputs, output: Outputs, session: Session):
     def _():
         ui.update_text_area("query", value="")
 
-        last_message: ChatMessageWithHtml = {
+        last_message: ChatMessageEnriched = {
             "content": input.query(),
             "role": "user",
             "content_html": ui.markdown(input.query()),
+            "token_count": get_token_count(input.query()),
         }
         session_messages2 = session_messages.get().copy()
         session_messages2.append(last_message)
@@ -241,7 +247,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         asyncio.Task(
             stream_to_reactive(
                 openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
-                    model="gpt-3.5-turbo",
+                    model=OPENAI_MODEL,
                     messages=[
                         {"role": msg["role"], "content": msg["content"]}
                         for msg in session_messages()
@@ -348,3 +354,10 @@ async def stream_to_reactive(
         async for message in func:
             val.set(message)
             await reactive.flush()
+
+
+encoding = tiktoken.encoding_for_model(OPENAI_MODEL)
+
+
+def get_token_count(s: str) -> int:
+    return len(encoding.encode(s))
