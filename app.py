@@ -1,74 +1,13 @@
 from __future__ import annotations
 
-import asyncio
-import inspect
 import json
 from datetime import datetime
-from typing import AsyncGenerator, Awaitable, Generator, Sequence, TypeVar, cast
+from typing import Generator, Sequence
 
-import openai
-import tiktoken
-from htmltools import Tag
-from shiny import App, Inputs, Outputs, Session, reactive, render, ui
+from shiny import App, Inputs, Outputs, Session, reactive, ui
 
 import api
-
-# The delay (in seconds) between the reactive polling events when streaming data.
-STREAM_POLLING_DELAY = 0.1
-
-OPENAI_MODEL = "gpt-3.5-turbo"
-
-page_css = """
-textarea {
-    margin-top: 10px;
-    resize: vertical;
-    overflow-y: auto;
-}
-pre, code {
-    background-color: #eeeeee;
-}
-.shiny-html-output p:last-child {
-    /* No space after last paragraph in a message */
-    margin-bottom: 0;
-}
-.shiny-html-output pre code {
-    /* Fix alignment of first line in a code block */
-    padding: 0;
-}
-.user-message {
-    border-radius: 4px;
-    padding: 5px;
-    margin-top: 10px;
-    border: 1px solid #dddddd;
-    background-color: #ffffff;
-}
-.assistant-message {
-    border-radius: 4px;
-    padding: 5px;
-    margin-top: 10px;
-    border: 1px solid #dddddd;
-    background-color: #f6f6f6;
-}
-"""
-
-# When the user presses Enter inside the query textarea, trigger a click on the "ask"
-# button. We also have to trigger a "change" event on the textarea just before that,
-# because otherwise Shiny will debounce changes to the value in the textarea, and the
-# value may not be updated before the "ask" button click event happens.
-page_js = """
-document.addEventListener("keydown", function(e) {
-  queryTextArea = document.getElementById("query");
-  if (
-    document.activeElement === queryTextArea &&
-    e.code === "Enter" &&
-    !e.shiftKey
-  ) {
-    event.preventDefault();
-    queryTextArea.dispatchEvent(new Event("change"));
-    document.getElementById("ask").click();
-  }
-});
-"""
+import chat
 
 # Code for initializing popper.js tooltips.
 tooltip_init_js = """
@@ -81,35 +20,23 @@ var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
 """
 
 app_ui = ui.page_fluid(
+    ui.head_content(ui.tags.title("Shiny ChatGPT")),
     ui.row(
         ui.div(
-            {"class": "col-sm-9"},
-            ui.head_content(
-                ui.tags.title("Shiny ChatGPT"),
-                ui.tags.style(page_css),
-                ui.tags.script(page_js),
-            ),
-            ui.output_ui("session_messages_ui"),
-            ui.output_ui("current_streaming_message"),
-            ui.input_text_area(
-                "query",
-                None,
-                # value="2+2",
-                # placeholder="Ask me anything...",
-                width="100%",
-            ),
-            ui.div(
-                {"style": "width: 100%; text-align: right;"},
-                ui.input_action_button("ask", "Ask"),
-            ),
+            {"class": "col-sm-5"},
+            chat.chat_ui("chat1"),
         ),
         ui.div(
-            {"class": "col-sm-3 bg-light"},
+            {"class": "col-sm-5"},
+            chat.chat_ui("chat2"),
+        ),
+        ui.div(
+            {"class": "col-sm-2 bg-light"},
             ui.div(
                 {"class": "sticky-sm-top", "style": "top: 15px;"},
                 ui.h4("Shiny ChatGPT"),
                 ui.hr(),
-                ui.p(f"Model: {OPENAI_MODEL}"),
+                ui.p("Model: gpt-3.5-turbo"),
                 ui.input_slider(
                     "temperature",
                     ui.span(
@@ -125,6 +52,7 @@ app_ui = ui.page_fluid(
                     value=0.7,
                     step=0.05,
                 ),
+                ui.input_switch("self_conversation", "Converse with self"),
                 ui.hr(),
                 ui.p(ui.h5("Export conversation")),
                 ui.input_radio_buttons(
@@ -154,138 +82,26 @@ app_ui = ui.page_fluid(
 
 # ======================================================================================
 
-T = TypeVar("T")
-
-
-# A customized version of ChatMessage, with a field for the Markdown `content` converted
-# to HTML.
-class ChatMessageEnriched(api.ChatMessage):
-    content_html: str
-    token_count: int
-
 
 def server(input: Inputs, output: Outputs, session: Session):
-    # chat_session = api.ChatSession()
-
-    # This contains each piece of the chat session when a streaming response is coming
-    # in. When that's not happening, it is set to None.
-    streaming_chat_piece: reactive.Value[
-        api.ChatCompletionStreaming | None
-    ] = reactive.Value(None)
-
-    # This is the current streaming chat string. While streaming it is a string; when
-    # not streaming, it is None.
-    streaming_chat_string: reactive.Value[str | None] = reactive.Value(None)
-
-    session_messages: reactive.Value[list[ChatMessageEnriched]] = reactive.Value(
-        [
-            {
-                "role": "system",
-                "content": "You are a helpful assistant.",
-                "content_html": "",
-                "token_count": get_token_count("You are a helpful assistant."),
-            }
-        ]
-    )
+    session_messages1, ask_question1 = chat.chat_server("chat1")
+    session_messages2, ask_question2 = chat.chat_server("chat2")
 
     @reactive.Effect
-    @reactive.event(streaming_chat_piece)
     def _():
-        piece = streaming_chat_piece()
-        if piece is None:
+        if not input.self_conversation():
             return
-
-        # If we got here, we know that streaming_chat_string is not None.
-        current_chat_string = cast(str, streaming_chat_string())
-
-        if piece["choices"][0]["finish_reason"] == "stop":
-            # # If we get here, we need to add the most recent message from chat_session to
-            # # session_messages.
-            # last_message = cast(ChatMessageWithHtml, chat_session.messages[-1].copy())
-            # last_message["content_html"] = ui.markdown(last_message["content"])
-
-            # Update session_messages. We need to make a copy to trigger a reactive
-            # invalidation.
-            last_message: ChatMessageEnriched = {
-                "content": current_chat_string,
-                "role": "assistant",
-                "content_html": ui.markdown(current_chat_string),
-                "token_count": get_token_count(current_chat_string),
-            }
-            session_messages2 = session_messages.get().copy()
-            session_messages2.append(last_message)
-            session_messages.set(session_messages2)
-            streaming_chat_string.set(None)
-            return
-
-        if "content" in piece["choices"][0]["delta"]:
-            streaming_chat_string.set(
-                current_chat_string + piece["choices"][0]["delta"]["content"]
-            )
+        last_message = session_messages1()[-1]
+        if last_message["role"] == "assistant":
+            ask_question2(last_message["content"])
 
     @reactive.Effect
-    @reactive.event(input.ask)
     def _():
-        ui.update_text_area("query", value="")
-
-        last_message: ChatMessageEnriched = {
-            "content": input.query(),
-            "role": "user",
-            "content_html": ui.markdown(input.query()),
-            "token_count": get_token_count(input.query()),
-        }
-        session_messages2 = session_messages.get().copy()
-        session_messages2.append(last_message)
-        session_messages.set(session_messages2)
-
-        streaming_chat_string.set("")
-
-        # Launch a Task that updates the chat string asynchronously. We run this in a
-        # separate task so that the data can come in without need to await it in this
-        # Task (which would block other computation to happen, like running reactive
-        # stuff).
-        asyncio.Task(
-            stream_to_reactive(
-                openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
-                    model=OPENAI_MODEL,
-                    messages=[
-                        {"role": msg["role"], "content": msg["content"]}
-                        for msg in session_messages()
-                    ],
-                    stream=True,
-                ),
-                streaming_chat_piece,
-            )
-        )
-
-    @output
-    @render.ui
-    def session_messages_ui():
-        messages_html: list[Tag] = []
-        for message in session_messages():
-            if message["role"] == "system":
-                # Don't show system messages.
-                continue
-
-            messages_html.append(
-                ui.div({"class": message["role"] + "-message"}, message["content_html"])
-            )
-
-        return ui.div(*messages_html)
-
-    @output
-    @render.ui
-    def current_streaming_message():
-        # Only display this content while streaming. Once the streaming is done, this
-        # content will disappear and an identical-looking one will be added to the
-        # `session_messages_ui` output.
-        if streaming_chat_string() is None:
-            return ui.div()
-
-        return ui.div(
-            {"class": "assistant-message"},
-            streaming_chat_string(),
-        )
+        if not input.self_conversation():
+            return
+        last_message = session_messages2()[-1]
+        if last_message["role"] == "assistant":
+            ask_question1(last_message["content"])
 
     def download_conversation_filename() -> str:
         if input.download_format() == "JSON":
@@ -298,14 +114,14 @@ def server(input: Inputs, output: Outputs, session: Session):
     def download_conversation() -> Generator[str, None, None]:
         res: list[dict[str, str]] = []
         if input.download_format() == "JSON":
-            for message in session_messages():
+            for message in session_messages1():
                 # Copy over `role` and `content`, but not `content_html`.
                 message_copy = {"role": message["role"], "content": message["content"]}
                 res.append(message_copy)
             yield json.dumps(res, indent=2)
 
         else:
-            yield chat_messages_to_md(session_messages())
+            yield chat_messages_to_md(session_messages1())
 
 
 app = App(app_ui, server)
@@ -341,23 +157,3 @@ def chat_messages_to_md(messages: Sequence[api.ChatMessage]) -> str:
         res += "\n\n"
 
     return res
-
-
-async def stream_to_reactive(
-    func: AsyncGenerator[T, None] | Awaitable[AsyncGenerator[T, None]],
-    val: reactive.Value[T],
-) -> None:
-    if inspect.isawaitable(func):
-        func = await func  # type: ignore
-    func = cast(AsyncGenerator[T, None], func)
-    async with reactive._core.lock():
-        async for message in func:
-            val.set(message)
-            await reactive.flush()
-
-
-encoding = tiktoken.encoding_for_model(OPENAI_MODEL)
-
-
-def get_token_count(s: str) -> int:
-    return len(encoding.encode(s))
