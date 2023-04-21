@@ -52,7 +52,15 @@ app_ui = ui.page_fluid(
                     value=0.7,
                     step=0.05,
                 ),
-                ui.input_switch("self_conversation", "Converse with self"),
+                ui.input_switch("auto_converse", "Converse with self"),
+                ui.input_slider(
+                    "auto_converse_delay",
+                    "Conversation delay (seconds)",
+                    min=0,
+                    max=3,
+                    value=1,
+                    step=0.2,
+                ),
                 ui.hr(),
                 ui.p(ui.h5("Export conversation")),
                 ui.input_radio_buttons(
@@ -87,21 +95,32 @@ def server(input: Inputs, output: Outputs, session: Session):
     session_messages1, ask_question1 = chat.chat_server("chat1")
     session_messages2, ask_question2 = chat.chat_server("chat2")
 
-    @reactive.Effect
-    def _():
-        if not input.self_conversation():
-            return
-        last_message = session_messages1()[-1]
-        if last_message["role"] == "assistant":
-            ask_question2(last_message["content"])
+    # Which chat module has the most recent completed response from the server.
+    most_recent = reactive.Value(0)
 
     @reactive.Effect
+    @reactive.event(session_messages1)
     def _():
-        if not input.self_conversation():
-            return
+        with reactive.isolate():
+            if not input.auto_converse() or most_recent() == 1:
+                return
+
+        last_message = session_messages1()[-1]
+        if last_message["role"] == "assistant":
+            ask_question2(last_message["content"], input.auto_converse_delay())
+            most_recent.set(1)
+
+    @reactive.Effect
+    @reactive.event(session_messages2)
+    def _():
+        with reactive.isolate():
+            if not input.auto_converse() or most_recent() == 2:
+                return
+
         last_message = session_messages2()[-1]
         if last_message["role"] == "assistant":
-            ask_question1(last_message["content"])
+            ask_question1(last_message["content"], input.auto_converse_delay())
+            most_recent.set(2)
 
     def download_conversation_filename() -> str:
         if input.download_format() == "JSON":

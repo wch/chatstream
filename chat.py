@@ -116,7 +116,7 @@ def chat_server(
     session: Session,
     openai_model: OpenAiModels = DEFAULT_MODEL,
     system_prompt: str = SYSTEM_PROMPT,
-) -> tuple[reactive.Value[list[ChatMessageEnriched]], Callable[[str], None]]:
+) -> tuple[reactive.Value[list[ChatMessageEnriched]], Callable[[str, float], None]]:
     # This contains each piece of the chat session when a streaming response is coming
     # in. When that's not happening, it is set to None.
     streaming_chat_piece: reactive.Value[
@@ -138,8 +138,7 @@ def chat_server(
         ]
     )
 
-    new_query = reactive.Value("")
-    new_query_trigger = reactive.Value(0)
+    ask_trigger = reactive.Value(0)
 
     @reactive.Effect
     @reactive.event(streaming_chat_piece)
@@ -165,9 +164,7 @@ def chat_server(
                 "content_html": ui.markdown(current_chat_string),
                 "token_count": get_token_count(current_chat_string, openai_model),
             }
-            session_messages2 = session_messages.get().copy()
-            session_messages2.append(last_message)
-            session_messages.set(session_messages2)
+            session_messages.set(session_messages() + [last_message])
             streaming_chat_string.set(None)
             return
 
@@ -177,7 +174,7 @@ def chat_server(
             )
 
     @reactive.Effect
-    @reactive.event(input.ask, new_query_trigger, ignore_init=True)
+    @reactive.event(input.ask, ask_trigger)
     def _():
         if input.query() == "":
             return
@@ -190,9 +187,7 @@ def chat_server(
             "content_html": ui.markdown(input.query()),
             "token_count": get_token_count(input.query(), openai_model),
         }
-        session_messages2 = session_messages.get().copy()
-        session_messages2.append(last_message)
-        session_messages.set(session_messages2)
+        session_messages.set(session_messages() + [last_message])
 
         streaming_chat_string.set("")
 
@@ -245,23 +240,22 @@ def chat_server(
             ui.markdown(chat_string),
         )
 
-    def ask_question(query: str) -> None:
-        new_query.set(query)
+    def ask_question(query: str, delay: float = 1) -> None:
+        asyncio.Task(delayed_set_query(query, delay))
 
-    @reactive.Effect
-    @reactive.event(new_query)
-    def _():
-        if new_query() == "":
-            return
+    async def delayed_set_query(query: str, delay: float) -> None:
+        await asyncio.sleep(delay)
+        async with reactive.lock():
+            ui.update_text_area("query", value=query, session=session)
+            await reactive.flush()
 
-        ui.update_text_area("query", value=new_query())
-
-        asyncio.Task(delayed_new_query_trigger(0.5))
+        # Short delay before triggering ask_trigger.
+        asyncio.Task(delayed_new_query_trigger(0.2))
 
     async def delayed_new_query_trigger(delay: float) -> None:
         await asyncio.sleep(delay)
         async with reactive.lock():
-            new_query_trigger.set(new_query_trigger() + 1)
+            ask_trigger.set(ask_trigger() + 1)
             await reactive.flush()
 
     return session_messages, ask_question
