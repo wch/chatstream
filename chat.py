@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import time
 from typing import AsyncGenerator, Awaitable, Callable, Literal, TypeVar, cast
 
 import openai
@@ -21,6 +22,7 @@ OpenAiModels = Literal[
 
 DEFAULT_MODEL: OpenAiModels = "gpt-3.5-turbo"
 SYSTEM_PROMPT = "You are a helpful assistant."
+DEFAULT_TEMPERATURE = 0.7
 
 
 # A customized version of ChatMessage, with a field for the Markdown `content` converted
@@ -116,16 +118,25 @@ def chat_server(
     session: Session,
     openai_model: OpenAiModels = DEFAULT_MODEL,
     system_prompt: str = SYSTEM_PROMPT,
+    temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
+    throttle: float = 0.1,
 ) -> tuple[reactive.Value[list[ChatMessageEnriched]], Callable[[str, float], None]]:
-    # This contains each piece of the chat session when a streaming response is coming
-    # in. When that's not happening, it is set to None.
-    streaming_chat_piece: reactive.Value[
-        api.ChatCompletionStreaming | None
-    ] = reactive.Value(None)
+    # Ensure temperature is a function, even if we were passed a float.
+    if not callable(temperature):
+        temperature_value = temperature
+        temperature = lambda: temperature_value  # noqa: E731
 
-    # This is the current streaming chat string. While streaming it is a string; when
-    # not streaming, it is None.
-    streaming_chat_string: reactive.Value[str | None] = reactive.Value(None)
+    # This contains a tuple of the most recent messages when a streaming response is
+    # coming in. When not streaming, this is set to an empty tuple.
+    streaming_chat_messages_batch: reactive.Value[
+        tuple[api.ChatCompletionStreaming, ...]
+    ] = reactive.Value(tuple())
+
+    # This is the current streaming chat string, in the form of a tuple of strings, one
+    # string from each message.When not streaming, it is empty.
+    streaming_chat_string_pieces: reactive.Value[tuple[str, ...]] = reactive.Value(
+        tuple()
+    )
 
     session_messages: reactive.Value[list[ChatMessageEnriched]] = reactive.Value(
         [
@@ -141,37 +152,32 @@ def chat_server(
     ask_trigger = reactive.Value(0)
 
     @reactive.Effect
-    @reactive.event(streaming_chat_piece)
+    @reactive.event(streaming_chat_messages_batch)
     def _():
-        piece = streaming_chat_piece()
-        if piece is None:
-            return
+        current_batch = streaming_chat_messages_batch()
 
-        # If we got here, we know that streaming_chat_string is not None.
-        current_chat_string = cast(str, streaming_chat_string())
+        for message in current_batch:
+            if "content" in message["choices"][0]["delta"]:
+                streaming_chat_string_pieces.set(
+                    streaming_chat_string_pieces()
+                    + (message["choices"][0]["delta"]["content"],)
+                )
 
-        if piece["choices"][0]["finish_reason"] == "stop":
-            # # If we get here, we need to add the most recent message from chat_session to
-            # # session_messages.
-            # last_message = cast(ChatMessageWithHtml, chat_session.messages[-1].copy())
-            # last_message["content_html"] = ui.markdown(last_message["content"])
+            if message["choices"][0]["finish_reason"] == "stop":
+                # If we got here, we know that streaming_chat_string is not None.
+                current_message = "".join(streaming_chat_string_pieces())
 
-            # Update session_messages. We need to make a copy to trigger a reactive
-            # invalidation.
-            last_message: ChatMessageEnriched = {
-                "content": current_chat_string,
-                "role": "assistant",
-                "content_html": ui.markdown(current_chat_string),
-                "token_count": get_token_count(current_chat_string, openai_model),
-            }
-            session_messages.set(session_messages() + [last_message])
-            streaming_chat_string.set(None)
-            return
-
-        if "content" in piece["choices"][0]["delta"]:
-            streaming_chat_string.set(
-                current_chat_string + piece["choices"][0]["delta"]["content"]
-            )
+                # Update session_messages. We need to make a copy to trigger a reactive
+                # invalidation.
+                last_message: ChatMessageEnriched = {
+                    "content": current_message,
+                    "role": "assistant",
+                    "content_html": ui.markdown(current_message),
+                    "token_count": get_token_count(current_message, openai_model),
+                }
+                session_messages.set(session_messages() + [last_message])
+                streaming_chat_string_pieces.set(tuple())
+                return
 
     @reactive.Effect
     @reactive.event(input.ask, ask_trigger)
@@ -189,7 +195,9 @@ def chat_server(
         }
         session_messages.set(session_messages() + [last_message])
 
-        streaming_chat_string.set("")
+        # Set this to a non-empty tuple (with a blank string), to indicate that
+        # streaming is happening.
+        streaming_chat_string_pieces.set(tuple(""))
 
         # Launch a Task that updates the chat string asynchronously. We run this in a
         # separate task so that the data can come in without need to await it in this
@@ -204,8 +212,10 @@ def chat_server(
                         for msg in session_messages()
                     ],
                     stream=True,
+                    temperature=temperature(),
                 ),
-                streaming_chat_piece,
+                streaming_chat_messages_batch,
+                throttle=throttle,
             )
         )
 
@@ -213,7 +223,6 @@ def chat_server(
     @render.ui
     def session_messages_ui():
         messages_html: list[ui.Tag] = []
-        print(session_messages())
         for message in session_messages():
             if message["role"] == "system":
                 # Don't show system messages.
@@ -228,16 +237,16 @@ def chat_server(
     @output
     @render.ui
     def current_streaming_message():
-        chat_string = streaming_chat_string()
+        chat_string = streaming_chat_string_pieces()
         # Only display this content while streaming. Once the streaming is done, this
         # content will disappear and an identical-looking one will be added to the
         # `session_messages_ui` output.
-        if chat_string is None:
+        if len(chat_string) == 0:
             return ui.div()
 
         return ui.div(
             {"class": "assistant-message"},
-            ui.markdown(chat_string),
+            ui.markdown("".join(chat_string)),
         )
 
     def ask_question(query: str, delay: float = 1) -> None:
@@ -276,12 +285,29 @@ T = TypeVar("T")
 
 async def stream_to_reactive(
     func: AsyncGenerator[T, None] | Awaitable[AsyncGenerator[T, None]],
-    val: reactive.Value[T],
+    val: reactive.Value[tuple[T]],
+    throttle: float = 0,
 ) -> None:
     if inspect.isawaitable(func):
         func = await func  # type: ignore
     func = cast(AsyncGenerator[T, None], func)
+
+    last_message_time = time.time()
+    message_batch: list[T] = []
+
     async for message in func:
+        message_batch.append(message)
+
+        if time.time() - last_message_time > throttle:
+            async with reactive.lock():
+                val.set(tuple(message_batch))
+                await reactive.flush()
+
+            last_message_time = time.time()
+            message_batch = []
+
+    # Once the stream has ended, flush the remaining messages.
+    if len(message_batch) > 0:
         async with reactive.lock():
-            val.set(message)
+            val.set(tuple(message_batch))
             await reactive.flush()

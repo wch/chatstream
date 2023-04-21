@@ -92,8 +92,12 @@ app_ui = ui.page_fluid(
 
 
 def server(input: Inputs, output: Outputs, session: Session):
-    session_messages1, ask_question1 = chat.chat_server("chat1")
-    session_messages2, ask_question2 = chat.chat_server("chat2")
+    session_messages1, ask_question1 = chat.chat_server(
+        "chat1", temperature=input.temperature
+    )
+    session_messages2, ask_question2 = chat.chat_server(
+        "chat2", temperature=input.temperature
+    )
 
     # Which chat module has the most recent completed response from the server.
     most_recent = reactive.Value(0)
