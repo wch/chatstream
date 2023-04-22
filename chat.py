@@ -32,31 +32,31 @@ class ChatMessageEnriched(api.ChatMessage):
     token_count: int
 
 
-page_css = """
-textarea.form-control {
+page_css_template = """
+#%s textarea.form-control {
     margin-top: 10px;
     resize: none;
     overflow-y: hidden;
 }
-pre, code {
+#%s pre, code {
     background-color: #eeeeee;
 }
-.shiny-html-output p:last-child {
+#%s .shiny-html-output p:last-child {
     /* No space after last paragraph in a message */
     margin-bottom: 0;
 }
-.shiny-html-output pre code {
+#%s .shiny-html-output pre code {
     /* Fix alignment of first line in a code block */
     padding: 0;
 }
-.user-message {
+#%s .user-message {
     border-radius: 4px;
     padding: 5px;
     margin-top: 10px;
     border: 1px solid #dddddd;
     background-color: #ffffff;
 }
-.assistant-message {
+#%s .assistant-message {
     border-radius: 4px;
     padding: 5px;
     margin-top: 10px;
@@ -101,7 +101,14 @@ textarea_js_template = """
 
 @module.ui
 def chat_ui() -> ui.Tag:
+    id = module.resolve_id("chat_module")
+
+    # The page_css_template contains several instances of %s, and we need to replace all
+    # of them with the id for proper CSS scoping.
+    page_css = page_css_template % ((id,) * 6)
+
     return ui.div(
+        {"id": id},
         ui.head_content(ui.tags.style(page_css)),
         ui.output_ui("session_messages_ui"),
         ui.output_ui("current_streaming_message_ui"),
