@@ -32,6 +32,7 @@ class ChatMessageEnriched(api.ChatMessage):
     token_count: int
 
 
+# The instances of %s in the template will be replaced with the module ID.
 page_css_template = """
 #%s textarea.form-control {
     margin-top: 10px;
@@ -85,8 +86,8 @@ textarea_js_template = """
         }
     });
 
+    // Automatically resize the textarea to fit its content.
     function autoSizeTextarea() {
-        // Reset height before calculating the new height.
         queryTextArea.style.height = "auto";
         queryTextArea.style.height = queryTextArea.scrollHeight + "px";
     }
