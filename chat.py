@@ -23,6 +23,7 @@ OpenAiModels = Literal[
 DEFAULT_MODEL: OpenAiModels = "gpt-3.5-turbo"
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 DEFAULT_TEMPERATURE = 0.7
+DEFAULT_THROTTLE = 0.1
 
 
 # A customized version of ChatMessage, with a field for the Markdown `content` converted
@@ -125,7 +126,7 @@ def chat_server(
     openai_model: OpenAiModels | Callable[[], OpenAiModels] = DEFAULT_MODEL,
     system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
     temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
-    throttle: float = 0.1,
+    throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
 ) -> tuple[
     reactive.Value[tuple[ChatMessageEnriched, ...]], Callable[[str, float], None]
 ]:
@@ -139,6 +140,9 @@ def chat_server(
     if not callable(temperature):
         temperature_value = temperature
         temperature = lambda: temperature_value  # noqa: E731
+    if not callable(throttle):
+        throttle_value = throttle
+        throttle = lambda: throttle_value  # noqa: E731
 
     # This contains a tuple of the most recent messages when a streaming response is
     # coming in. When not streaming, this is set to an empty tuple.
@@ -229,7 +233,7 @@ def chat_server(
                     temperature=temperature(),
                 ),
                 streaming_chat_messages_batch,
-                throttle=throttle,
+                throttle=throttle(),
             )
         )
 
