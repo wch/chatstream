@@ -33,10 +33,10 @@ class ChatMessageEnriched(api.ChatMessage):
 
 
 page_css = """
-textarea {
+textarea.form-control {
     margin-top: 10px;
-    resize: vertical;
-    overflow-y: auto;
+    resize: none;
+    overflow-y: hidden;
 }
 pre, code {
     background-color: #eeeeee;
@@ -65,49 +65,47 @@ pre, code {
 }
 """
 
+# When the user presses Enter inside the query textarea, trigger a click on the "ask"
+# button. We also have to trigger a "change" event on the textarea just before that,
+# because otherwise Shiny will debounce changes to the value in the textarea, and the
+# value may not be updated before the "ask" button click event happens.
+textarea_js_template = """
+(() => {
+    const queryTextArea = document.getElementById("%s");
+
+    queryTextArea.addEventListener("keydown", function(e) {
+        if (
+            e.code === "Enter" &&
+            !e.shiftKey
+        ) {
+            event.preventDefault();
+            queryTextArea.dispatchEvent(new Event("change"));
+            queryTextArea.disabled = true;
+            document.getElementById("%s").click();
+        }
+    });
+
+    function autoSizeTextarea() {
+        // Reset height before calculating the new height.
+        queryTextArea.style.height = "auto";
+        queryTextArea.style.height = queryTextArea.scrollHeight + "px";
+    }
+    autoSizeTextarea();
+
+    queryTextArea.addEventListener("input", autoSizeTextarea);
+
+    queryTextArea.focus();
+})();
+"""
+
 
 @module.ui
 def chat_ui() -> ui.Tag:
-    # When the user presses Enter inside the query textarea, trigger a click on the "ask"
-    # button. We also have to trigger a "change" event on the textarea just before that,
-    # because otherwise Shiny will debounce changes to the value in the textarea, and the
-    # value may not be updated before the "ask" button click event happens.
-    page_js = """
-document.addEventListener("keydown", function(e) {
-    queryTextArea = document.getElementById("%s");
-    if (
-        document.activeElement === queryTextArea &&
-        e.code === "Enter" &&
-        !e.shiftKey
-    ) {
-        event.preventDefault();
-        queryTextArea.dispatchEvent(new Event("change"));
-        document.getElementById("%s").click();
-    }
-});
-    """ % (
-        module.resolve_id("query"),
-        module.resolve_id("ask"),
-    )
-
     return ui.div(
-        ui.head_content(
-            ui.tags.style(page_css),
-            ui.tags.script(page_js),
-        ),
+        ui.head_content(ui.tags.style(page_css)),
         ui.output_ui("session_messages_ui"),
-        ui.output_ui("current_streaming_message"),
-        ui.input_text_area(
-            "query",
-            None,
-            # value="2+2",
-            # placeholder="Ask me anything...",
-            width="100%",
-        ),
-        ui.div(
-            {"style": "width: 100%; text-align: right;"},
-            ui.input_action_button("ask", "Ask"),
-        ),
+        ui.output_ui("current_streaming_message_ui"),
+        ui.output_ui("query_ui"),
     )
 
 
@@ -133,7 +131,7 @@ def chat_server(
     ] = reactive.Value(tuple())
 
     # This is the current streaming chat string, in the form of a tuple of strings, one
-    # string from each message.When not streaming, it is empty.
+    # string from each message. When not streaming, it is empty.
     streaming_chat_string_pieces: reactive.Value[tuple[str, ...]] = reactive.Value(
         tuple()
     )
@@ -185,8 +183,6 @@ def chat_server(
         if input.query() == "":
             return
 
-        ui.update_text_area("query", value="")
-
         last_message: ChatMessageEnriched = {
             "content": input.query(),
             "role": "user",
@@ -197,7 +193,7 @@ def chat_server(
 
         # Set this to a non-empty tuple (with a blank string), to indicate that
         # streaming is happening.
-        streaming_chat_string_pieces.set(tuple(""))
+        streaming_chat_string_pieces.set(("",))
 
         # Launch a Task that updates the chat string asynchronously. We run this in a
         # separate task so that the data can come in without need to await it in this
@@ -236,17 +232,50 @@ def chat_server(
 
     @output
     @render.ui
-    def current_streaming_message():
-        chat_string = streaming_chat_string_pieces()
+    def current_streaming_message_ui():
+        pieces = streaming_chat_string_pieces()
+
         # Only display this content while streaming. Once the streaming is done, this
         # content will disappear and an identical-looking one will be added to the
         # `session_messages_ui` output.
-        if len(chat_string) == 0:
+        if len(pieces) == 0:
             return ui.div()
 
+        content = "".join(pieces)
+        if content == "":
+            content = ui.HTML("&nbsp;")
+        else:
+            content = ui.markdown(content)
+
+        return ui.div({"class": "assistant-message"}, content)
+
+    @output
+    @render.ui
+    @reactive.event(streaming_chat_string_pieces)
+    def query_ui():
+        # While streaming an answer, don't show the query input.
+        if len(streaming_chat_string_pieces()) > 0:
+            return ui.div()
+
+        textarea_js = textarea_js_template % (
+            module.resolve_id("query"),
+            module.resolve_id("ask"),
+        )
+
         return ui.div(
-            {"class": "assistant-message"},
-            ui.markdown("".join(chat_string)),
+            ui.input_text_area(
+                "query",
+                None,
+                # value="2+2",
+                # placeholder="Ask me anything...",
+                rows=1,
+                width="100%",
+            ),
+            ui.div(
+                {"style": "width: 100%; text-align: right;"},
+                ui.input_action_button("ask", "Ask"),
+            ),
+            ui.tags.script(textarea_js),
         )
 
     def ask_question(query: str, delay: float = 1) -> None:
