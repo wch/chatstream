@@ -21,7 +21,7 @@ OpenAiModels = Literal[
 ]
 
 DEFAULT_MODEL: OpenAiModels = "gpt-3.5-turbo"
-SYSTEM_PROMPT = "You are a helpful assistant."
+DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 DEFAULT_TEMPERATURE = 0.7
 
 
@@ -122,12 +122,20 @@ def chat_server(
     input: Inputs,
     output: Outputs,
     session: Session,
-    openai_model: OpenAiModels = DEFAULT_MODEL,
-    system_prompt: str = SYSTEM_PROMPT,
+    openai_model: OpenAiModels | Callable[[], OpenAiModels] = DEFAULT_MODEL,
+    system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
     temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
     throttle: float = 0.1,
-) -> tuple[reactive.Value[list[ChatMessageEnriched]], Callable[[str, float], None]]:
-    # Ensure temperature is a function, even if we were passed a float.
+) -> tuple[
+    reactive.Value[tuple[ChatMessageEnriched, ...]], Callable[[str, float], None]
+]:
+    # Ensure these are functions, even if we were passed static values.
+    if not callable(openai_model):
+        openai_model_value = openai_model
+        openai_model = lambda: openai_model_value  # noqa: E731
+    if not callable(system_prompt):
+        system_prompt_value = system_prompt
+        system_prompt = lambda: system_prompt_value  # noqa: E731
     if not callable(temperature):
         temperature_value = temperature
         temperature = lambda: temperature_value  # noqa: E731
@@ -144,18 +152,20 @@ def chat_server(
         tuple()
     )
 
-    session_messages: reactive.Value[list[ChatMessageEnriched]] = reactive.Value(
-        [
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT,
-                "content_html": "",
-                "token_count": get_token_count(SYSTEM_PROMPT, openai_model),
-            }
-        ]
+    session_messages: reactive.Value[tuple[ChatMessageEnriched, ...]] = reactive.Value(
+        tuple()
     )
 
     ask_trigger = reactive.Value(0)
+
+    @reactive.Calc
+    def system_prompt_message() -> ChatMessageEnriched:
+        return {
+            "role": "system",
+            "content": system_prompt(),
+            "content_html": "",
+            "token_count": get_token_count(system_prompt(), openai_model()),
+        }
 
     @reactive.Effect
     @reactive.event(streaming_chat_messages_batch)
@@ -179,9 +189,9 @@ def chat_server(
                     "content": current_message,
                     "role": "assistant",
                     "content_html": ui.markdown(current_message),
-                    "token_count": get_token_count(current_message, openai_model),
+                    "token_count": get_token_count(current_message, openai_model()),
                 }
-                session_messages.set(session_messages() + [last_message])
+                session_messages.set(session_messages() + (last_message,))
                 streaming_chat_string_pieces.set(tuple())
                 return
 
@@ -195,9 +205,9 @@ def chat_server(
             "content": input.query(),
             "role": "user",
             "content_html": ui.markdown(input.query()),
-            "token_count": get_token_count(input.query(), openai_model),
+            "token_count": get_token_count(input.query(), openai_model()),
         }
-        session_messages.set(session_messages() + [last_message])
+        session_messages.set(session_messages() + (last_message,))
 
         # Set this to a non-empty tuple (with a blank string), to indicate that
         # streaming is happening.
@@ -210,10 +220,10 @@ def chat_server(
         asyncio.Task(
             stream_to_reactive(
                 openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
-                    model=openai_model,
+                    model=openai_model(),
                     messages=[
-                        {"role": msg["role"], "content": msg["content"]}
-                        for msg in session_messages()
+                        chat_message_enriched_to_chat_message(msg)
+                        for msg in ((system_prompt_message(),) + session_messages())
                     ],
                     stream=True,
                     temperature=temperature(),
@@ -348,3 +358,7 @@ async def stream_to_reactive(
         async with reactive.lock():
             val.set(tuple(message_batch))
             await reactive.flush()
+
+
+def chat_message_enriched_to_chat_message(msg: ChatMessageEnriched) -> api.ChatMessage:
+    return {"role": msg["role"], "content": msg["content"]}
