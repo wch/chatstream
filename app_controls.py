@@ -117,12 +117,8 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     @session.download(filename=download_conversation_filename)
     def download_conversation() -> Generator[str, None, None]:
-        res: list[dict[str, str]] = []
         if input.download_format() == "JSON":
-            for message in chat_session.messages():
-                # Copy over `role` and `content`, but not `content_html`.
-                message_copy = {"role": message["role"], "content": message["content"]}
-                res.append(message_copy)
+            res = chat.chat_messages_enriched_to_chat_messages(chat_session.messages())
             yield json.dumps(res, indent=2)
 
         else:

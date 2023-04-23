@@ -5,7 +5,7 @@ import functools
 import inspect
 import sys
 import time
-from typing import AsyncGenerator, Awaitable, Callable, Literal, TypeVar, cast
+from typing import AsyncGenerator, Awaitable, Callable, Literal, Sequence, TypeVar, cast
 
 import openai
 import tiktoken
@@ -179,10 +179,9 @@ def chat_server(
 
         # Prepend system prompt, and convert enriched chat messages to chat messages
         # without extra fields.
-        session_messages_with_sys_prompt: list[openai_api.ChatMessage] = [
-            chat_message_enriched_to_chat_message(msg)
-            for msg in ((system_prompt_message(),) + session_messages())
-        ]
+        session_messages_with_sys_prompt = chat_messages_enriched_to_chat_messages(
+            ((system_prompt_message(),) + session_messages())
+        )
 
         # Launch a Task that updates the chat string asynchronously. We run this in a
         # separate task so that the data can come in without need to await it in this
@@ -347,6 +346,12 @@ def chat_message_enriched_to_chat_message(
     msg: ChatMessageEnriched,
 ) -> openai_api.ChatMessage:
     return {"role": msg["role"], "content": msg["content"]}
+
+
+def chat_messages_enriched_to_chat_messages(
+    messages: Sequence[ChatMessageEnriched],
+) -> list[openai_api.ChatMessage]:
+    return list(chat_message_enriched_to_chat_message(msg) for msg in messages)
 
 
 def is_async_callable(
