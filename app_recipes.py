@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import webscraper
 from shiny import App, Inputs, Outputs, Session, ui
 
 import chat
+import webscraper
 
 app_ui = ui.page_fixed(
+    ui.p(ui.tags.b("Enter the URL for a recipe web page:")),
     chat.chat_ui("chat1"),
 )
 
