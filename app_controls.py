@@ -33,7 +33,7 @@ app_ui = ui.page_fluid(
                 {"class": "sticky-sm-top", "style": "top: 15px;"},
                 ui.h4("Shiny ChatGPT"),
                 ui.hr(),
-                ui.p("Model: gpt-3.5-turbo"),
+                ui.input_select("model", "Model", choices=["gpt-3.5-turbo"]),
                 ui.input_slider(
                     "temperature",
                     ui.span(
@@ -102,6 +102,7 @@ app_ui = ui.page_fluid(
 def server(input: Inputs, output: Outputs, session: Session):
     session_messages1, _ = chat.chat_server(
         "chat1",
+        model=input.model,
         system_prompt=input.system_prompt,
         temperature=input.temperature,
         throttle=input.throttle,

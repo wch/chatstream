@@ -60,7 +60,7 @@ def chat_server(
     input: Inputs,
     output: Outputs,
     session: Session,
-    openai_model: OpenAiModels | Callable[[], OpenAiModels] = DEFAULT_MODEL,
+    model: OpenAiModels | Callable[[], OpenAiModels] = DEFAULT_MODEL,
     system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
     temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
     throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
@@ -70,10 +70,10 @@ def chat_server(
     reactive.Value[tuple[ChatMessageEnriched, ...]], Callable[[str, float], None]
 ]:
     # Ensure these are functions, even if we were passed static values.
-    openai_model = cast(
+    model = cast(
         # pyright needs a little help with this.
         Callable[[], OpenAiModels],
-        wrap_function_nonreactive(openai_model),
+        wrap_function_nonreactive(model),
     )
     system_prompt = wrap_function_nonreactive(system_prompt)
     temperature = wrap_function_nonreactive(temperature)
@@ -109,7 +109,7 @@ def chat_server(
             "content_preprocessed": system_prompt(),
             "content": system_prompt(),
             "content_html": "",
-            "token_count": get_token_count(system_prompt(), openai_model()),
+            "token_count": get_token_count(system_prompt(), model()),
         }
 
     @reactive.Effect
@@ -135,7 +135,7 @@ def chat_server(
                     "content": current_message,
                     "role": "assistant",
                     "content_html": ui.markdown(current_message),
-                    "token_count": get_token_count(current_message, openai_model()),
+                    "token_count": get_token_count(current_message, model()),
                 }
                 session_messages.set(session_messages() + (last_message,))
                 streaming_chat_string_pieces.set(tuple())
@@ -154,7 +154,7 @@ def chat_server(
             "content": query_processed,
             "role": "user",
             "content_html": ui.markdown(input.query()),
-            "token_count": get_token_count(query_processed, openai_model()),
+            "token_count": get_token_count(query_processed, model()),
         }
         session_messages.set(session_messages() + (last_message,))
 
@@ -176,7 +176,7 @@ def chat_server(
         asyncio.create_task(
             stream_to_reactive(
                 openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
-                    model=openai_model(),
+                    model=model(),
                     messages=session_messages_with_sys_prompt,
                     stream=True,
                     temperature=temperature(),
