@@ -10,6 +10,7 @@ from typing import AsyncGenerator, Awaitable, Callable, Literal, TypeVar, cast
 import openai
 import tiktoken
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
+from htmltools import HTMLDependency
 
 import openai_api
 
@@ -41,85 +42,13 @@ class ChatMessageEnriched(openai_api.ChatMessage):
     token_count: int
 
 
-# The instances of %s in the template will be replaced with the module ID.
-page_css_template = """
-#%s textarea.form-control {
-    margin-top: 10px;
-    resize: none;
-    overflow-y: hidden;
-}
-#%s pre, code {
-    background-color: #eeeeee;
-}
-#%s .shiny-html-output p:last-child {
-    /* No space after last paragraph in a message */
-    margin-bottom: 0;
-}
-#%s .shiny-html-output pre code {
-    /* Fix alignment of first line in a code block */
-    padding: 0;
-}
-#%s .user-message {
-    border-radius: 4px;
-    padding: 5px;
-    margin-top: 10px;
-    border: 1px solid #dddddd;
-    background-color: #ffffff;
-}
-#%s .assistant-message {
-    border-radius: 4px;
-    padding: 5px;
-    margin-top: 10px;
-    border: 1px solid #dddddd;
-    background-color: #f0f0f0;
-}
-"""
-
-# When the user presses Enter inside the query textarea, trigger a click on the "ask"
-# button. We also have to trigger a "change" event on the textarea just before that,
-# because otherwise Shiny will debounce changes to the value in the textarea, and the
-# value may not be updated before the "ask" button click event happens.
-textarea_js_template = """
-(() => {
-    const queryTextArea = document.getElementById("%s");
-
-    queryTextArea.addEventListener("keydown", function(e) {
-        if (
-            e.code === "Enter" &&
-            !e.shiftKey
-        ) {
-            event.preventDefault();
-            queryTextArea.dispatchEvent(new Event("change"));
-            queryTextArea.disabled = true;
-            document.getElementById("%s").click();
-        }
-    });
-
-    // Automatically resize the textarea to fit its content.
-    function autoSizeTextarea() {
-        queryTextArea.style.height = "auto";
-        queryTextArea.style.height = queryTextArea.scrollHeight + "px";
-    }
-    autoSizeTextarea();
-
-    queryTextArea.addEventListener("input", autoSizeTextarea);
-
-    queryTextArea.focus();
-})();
-"""
-
-
 @module.ui
 def chat_ui() -> ui.Tag:
     id = module.resolve_id("chat_module")
 
-    # The page_css_template contains several instances of %s, and we need to replace all
-    # of them with the id for proper CSS scoping.
-    page_css = page_css_template % ((id,) * 6)
-
     return ui.div(
-        {"id": id},
-        ui.head_content(ui.tags.style(page_css)),
+        {"id": id, "class": "shiny-gpt-chat"},
+        _chat_dependency(),
         ui.output_ui("session_messages_ui"),
         ui.output_ui("current_streaming_message_ui"),
         ui.output_ui("query_ui"),
@@ -189,7 +118,7 @@ def chat_server(
 
     @reactive.Effect
     @reactive.event(streaming_chat_messages_batch)
-    def _():
+    def finalize_streaming_result():
         current_batch = streaming_chat_messages_batch()
 
         for message in current_batch:
@@ -218,7 +147,7 @@ def chat_server(
 
     @reactive.Effect
     @reactive.event(input.ask, ask_trigger)
-    async def _():
+    async def perform_query():
         if input.query() == "":
             return
 
@@ -241,7 +170,7 @@ def chat_server(
         # separate task so that the data can come in without need to await it in this
         # Task (which would block other computation to happen, like running reactive
         # stuff).
-        asyncio.Task(
+        asyncio.create_task(
             stream_to_reactive(
                 openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
                     model=openai_model(),
@@ -299,11 +228,6 @@ def chat_server(
         if len(streaming_chat_string_pieces()) > 0:
             return ui.div()
 
-        textarea_js = textarea_js_template % (
-            module.resolve_id("query"),
-            module.resolve_id("ask"),
-        )
-
         return ui.div(
             ui.input_text_area(
                 "query",
@@ -317,11 +241,15 @@ def chat_server(
                 {"style": "width: 100%; text-align: right;"},
                 ui.input_action_button("ask", "Ask"),
             ),
-            ui.tags.script(textarea_js),
+            ui.tags.script(
+                "document.getElementById('{}').focus();".format(
+                    module.resolve_id("query")
+                )
+            ),
         )
 
     def ask_question(query: str, delay: float = 1) -> None:
-        asyncio.Task(delayed_set_query(query, delay))
+        asyncio.create_task(delayed_set_query(query, delay))
 
     async def delayed_set_query(query: str, delay: float) -> None:
         await asyncio.sleep(delay)
@@ -330,7 +258,7 @@ def chat_server(
             await reactive.flush()
 
         # Short delay before triggering ask_trigger.
-        asyncio.Task(delayed_new_query_trigger(0.2))
+        asyncio.create_task(delayed_new_query_trigger(0.2))
 
     async def delayed_new_query_trigger(delay: float) -> None:
         await asyncio.sleep(delay)
@@ -426,3 +354,13 @@ def wrap_async(
         return fn(*args, **kwargs)
 
     return fn_async
+
+
+def _chat_dependency():
+    return HTMLDependency(
+        "shiny-gpt-chat",
+        "0.0.0",
+        source={"package": "chat", "subdir": "assets"},
+        script={"src": "chat.js"},
+        stylesheet={"href": "chat.css"},
+    )
