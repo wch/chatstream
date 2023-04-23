@@ -3,13 +3,20 @@ from __future__ import annotations
 import asyncio
 import inspect
 import time
-from typing import AsyncGenerator, Awaitable, Callable, Literal, TypeVar, cast
+from typing import (
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    Literal,
+    TypeGuard,
+    TypeVar,
+    cast,
+)
 
 import openai
+import openai_api
 import tiktoken
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
-
-import api
 
 OpenAiModels = Literal[
     "gpt-3.5-turbo",
@@ -28,7 +35,8 @@ DEFAULT_THROTTLE = 0.1
 
 # A customized version of ChatMessage, with a field for the Markdown `content` converted
 # to HTML, and a field for counting the number of tokens in the message.
-class ChatMessageEnriched(api.ChatMessage):
+class ChatMessageEnriched(openai_api.ChatMessage):
+    content_preprocessed: str
     content_html: str
     token_count: int
 
@@ -126,6 +134,8 @@ def chat_server(
     openai_model: OpenAiModels | Callable[[], OpenAiModels] = DEFAULT_MODEL,
     system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
     temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
+    query_preprocessor: Callable[[str], str]
+    | Callable[[str], Awaitable[str]] = lambda x: x,
     throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
 ) -> tuple[
     reactive.Value[tuple[ChatMessageEnriched, ...]], Callable[[str, float], None]
@@ -144,10 +154,20 @@ def chat_server(
         throttle_value = throttle
         throttle = lambda: throttle_value  # noqa: E731
 
+    # If query_preprocessor is not async, wrap it in an async function.
+    if not is_async_callable(query_preprocessor):
+        # A bit of awkward stuff with casting and naming to make the linter happy.
+        query_preprocessor_orig = cast(Callable[[str], str], query_preprocessor)
+
+        async def query_preprocessor_async(query: str) -> str:
+            return query_preprocessor_orig(query)
+
+        query_preprocessor = query_preprocessor_async
+
     # This contains a tuple of the most recent messages when a streaming response is
     # coming in. When not streaming, this is set to an empty tuple.
     streaming_chat_messages_batch: reactive.Value[
-        tuple[api.ChatCompletionStreaming, ...]
+        tuple[openai_api.ChatCompletionStreaming, ...]
     ] = reactive.Value(tuple())
 
     # This is the current streaming chat string, in the form of a tuple of strings, one
@@ -166,6 +186,7 @@ def chat_server(
     def system_prompt_message() -> ChatMessageEnriched:
         return {
             "role": "system",
+            "content_preprocessed": system_prompt(),
             "content": system_prompt(),
             "content_html": "",
             "token_count": get_token_count(system_prompt(), openai_model()),
@@ -190,6 +211,7 @@ def chat_server(
                 # Update session_messages. We need to make a copy to trigger a reactive
                 # invalidation.
                 last_message: ChatMessageEnriched = {
+                    "content_preprocessed": current_message,
                     "content": current_message,
                     "role": "assistant",
                     "content_html": ui.markdown(current_message),
@@ -201,15 +223,18 @@ def chat_server(
 
     @reactive.Effect
     @reactive.event(input.ask, ask_trigger)
-    def _():
+    async def _():
         if input.query() == "":
             return
 
+        query_processed = await query_preprocessor(input.query())
+
         last_message: ChatMessageEnriched = {
-            "content": input.query(),
+            "content_preprocessed": input.query(),
+            "content": query_processed,
             "role": "user",
             "content_html": ui.markdown(input.query()),
-            "token_count": get_token_count(input.query(), openai_model()),
+            "token_count": get_token_count(query_processed, openai_model()),
         }
         session_messages.set(session_messages() + (last_message,))
 
@@ -364,5 +389,24 @@ async def stream_to_reactive(
             await reactive.flush()
 
 
-def chat_message_enriched_to_chat_message(msg: ChatMessageEnriched) -> api.ChatMessage:
+def chat_message_enriched_to_chat_message(
+    msg: ChatMessageEnriched,
+) -> openai_api.ChatMessage:
     return {"role": msg["role"], "content": msg["content"]}
+
+
+def is_async_callable(
+    obj: Callable[..., T] | Callable[..., Awaitable[T]]
+) -> TypeGuard[Callable[..., Awaitable[T]]]:
+    """
+    Returns True if `obj` is an `async def` function, or if it's an object with a
+    `__call__` method which is an `async def` function. This function should generally
+    be used in this code base instead of iscoroutinefunction().
+    """
+    if inspect.iscoroutinefunction(obj):
+        return True
+    if hasattr(obj, "__call__"):  # noqa: B004
+        if inspect.iscoroutinefunction(obj.__call__):  # type: ignore
+            return True
+
+    return False
