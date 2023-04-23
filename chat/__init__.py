@@ -242,9 +242,14 @@ def chat_server(
                 ui.input_action_button("ask", "Ask"),
             ),
             ui.tags.script(
-                "document.getElementById('{}').focus();".format(
-                    module.resolve_id("query")
-                )
+                # The explicit focus() call is needed so that the user can type the next
+                # question without clicking on the query box again. However, it's a bit
+                # too aggressive, because it will steal focus if, while the answer is
+                # streaming, the user clicks somewhere else. It would be better to have
+                # the query box set to `display: none` while the answer streams and then
+                # unset afterward, so that it can keep focus, but won't steal focus.
+                "document.getElementById('%s').focus();"
+                % module.resolve_id("query")
             ),
         )
 
