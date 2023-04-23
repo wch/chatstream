@@ -42,6 +42,25 @@ class ChatMessageEnriched(openai_api.ChatMessage):
     token_count: int
 
 
+class ChatSession:
+    _messages: reactive.Value[tuple[ChatMessageEnriched, ...]]
+    _ask_question: Callable[[str, float], None]
+
+    def __init__(
+        self,
+        messages: reactive.Value[tuple[ChatMessageEnriched, ...]],
+        ask_callback: Callable[[str, float], None],
+    ):
+        self._messages = messages
+        self._ask_question = ask_callback
+
+    def messages(self) -> tuple[ChatMessageEnriched, ...]:
+        return self._messages()
+
+    def ask(self, query: str, delay: float = 1) -> None:
+        self._ask_question(query, delay)
+
+
 @module.ui
 def chat_ui() -> ui.Tag:
     id = module.resolve_id("chat_module")
@@ -66,9 +85,7 @@ def chat_server(
     throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
     query_preprocessor: Callable[[str], str]
     | Callable[[str], Awaitable[str]] = lambda x: x,
-) -> tuple[
-    reactive.Value[tuple[ChatMessageEnriched, ...]], Callable[[str, float], None]
-]:
+) -> ChatSession:
     # Ensure these are functions, even if we were passed static values.
     model = cast(
         # pyright needs a little help with this.
@@ -171,18 +188,19 @@ def chat_server(
         # separate task so that the data can come in without need to await it in this
         # Task (which would block other computation to happen, like running reactive
         # stuff).
-        asyncio.create_task(
-            stream_to_reactive(
-                openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
-                    model=model(),
-                    messages=session_messages_with_sys_prompt,
-                    stream=True,
-                    temperature=temperature(),
-                ),
-                streaming_chat_messages_batch,
-                throttle=throttle(),
-            )
+        messages = stream_to_reactive(
+            openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
+                model=model(),
+                messages=session_messages_with_sys_prompt,
+                stream=True,
+                temperature=temperature(),
+            ),
+            throttle=throttle(),
         )
+
+        @reactive.Effect
+        def copy_messages_to_batch():
+            streaming_chat_messages_batch.set(messages())
 
     @output
     @render.ui
@@ -269,7 +287,7 @@ def chat_server(
             ask_trigger.set(ask_trigger() + 1)
             await reactive.flush()
 
-    return session_messages, ask_question
+    return ChatSession(session_messages, ask_question)
 
 
 # ==============================================================================
@@ -286,34 +304,43 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-async def stream_to_reactive(
+# Converts an async generator of type T into a reactive source of type
+# tuple[T, ...].
+def stream_to_reactive(
     func: AsyncGenerator[T, None] | Awaitable[AsyncGenerator[T, None]],
-    val: reactive.Value[tuple[T]],
     throttle: float = 0,
-) -> None:
-    if inspect.isawaitable(func):
-        func = await func  # type: ignore
-    func = cast(AsyncGenerator[T, None], func)
+) -> Callable[[], tuple[T, ...]]:
+    val: reactive.Value[tuple[T, ...]] = reactive.Value(tuple())
 
-    last_message_time = time.time()
-    message_batch: list[T] = []
+    async def task():
+        nonlocal func
+        if inspect.isawaitable(func):
+            func = await func  # type: ignore
+        func = cast(AsyncGenerator[T, None], func)
 
-    async for message in func:
-        message_batch.append(message)
+        last_message_time = time.time()
+        message_batch: list[T] = []
 
-        if time.time() - last_message_time > throttle:
+        async for message in func:
+            message_batch.append(message)
+
+            if time.time() - last_message_time > throttle:
+                async with reactive.lock():
+                    val.set(tuple(message_batch))
+                    await reactive.flush()
+
+                last_message_time = time.time()
+                message_batch = []
+
+        # Once the stream has ended, flush the remaining messages.
+        if len(message_batch) > 0:
             async with reactive.lock():
                 val.set(tuple(message_batch))
                 await reactive.flush()
 
-            last_message_time = time.time()
-            message_batch = []
+    asyncio.create_task(task())
 
-    # Once the stream has ended, flush the remaining messages.
-    if len(message_batch) > 0:
-        async with reactive.lock():
-            val.set(tuple(message_batch))
-            await reactive.flush()
+    return val.get
 
 
 def chat_message_enriched_to_chat_message(

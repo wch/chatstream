@@ -3,24 +3,32 @@
 // because otherwise Shiny will debounce changes to the value in the textarea, and the
 // value may not be updated before the "ask" button click event happens.
 (() => {
-  document.addEventListener("keydown", (e) => {
-    const { target } = e;
-    if (target.matches(".shiny-gpt-chat textarea")) {
-      if (e.code === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        target.dispatchEvent(new Event("change"));
-        target.disabled = true;
-        target.closest(".shiny-gpt-chat").querySelector("button").click();
+  function onDelegatedEvent(eventName, selector, callback) {
+    document.addEventListener(eventName, (e) => {
+      if (e.target.matches(selector)) {
+        callback(e);
       }
+    });
+  }
+
+  onDelegatedEvent("keydown", ".shiny-gpt-chat textarea", (e) => {
+    const { target } = e;
+    if (e.code === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      target.dispatchEvent(new Event("change"));
+      target.disabled = true;
+      target.closest(".shiny-gpt-chat").querySelector("button").click();
     }
   });
 
-  document.addEventListener("input", (e) => {
+  onDelegatedEvent("input", ".shiny-gpt-chat textarea", (e) => {
     const { target } = e;
-    if (target.matches(".shiny-gpt-chat textarea")) {
-      // Automatically resize the textarea to fit its content.
-      target.style.height = "auto";
-      target.style.height = target.scrollHeight + "px";
-    }
+    // Automatically resize the textarea to fit its content.
+    target.style.height = "auto";
+    target.style.height = target.scrollHeight + "px";
+  });
+
+  onDelegatedEvent("click", ".shiny-gpt-chat button", (e) => {
+    e.target.disabled = true;
   });
 })();

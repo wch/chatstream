@@ -79,38 +79,40 @@ app_ui = ui.page_fluid(
 
 
 def server(input: Inputs, output: Outputs, session: Session):
-    session_messages1, ask_question1 = chat.chat_server(
-        "chat1", temperature=input.temperature
-    )
-    session_messages2, ask_question2 = chat.chat_server(
-        "chat2", temperature=input.temperature
-    )
+    chat_session1 = chat.chat_server("chat1", temperature=input.temperature)
+    chat_session2 = chat.chat_server("chat2", temperature=input.temperature)
 
     # Which chat module has the most recent completed response from the server.
     most_recent = reactive.Value(0)
 
     @reactive.Effect
-    @reactive.event(session_messages1)
+    @reactive.event(chat_session1.messages)
     def _():
         with reactive.isolate():
             if not input.auto_converse() or most_recent() == 1:
                 return
 
-        last_message = session_messages1()[-1]
+        last_message = chat_session1.messages()[-1]
         if last_message["role"] == "assistant":
-            ask_question2(last_message["content"], input.auto_converse_delay())
+            chat_session2.ask(
+                last_message["content"],
+                input.auto_converse_delay(),
+            )
             most_recent.set(1)
 
     @reactive.Effect
-    @reactive.event(session_messages2)
+    @reactive.event(chat_session2.messages)
     def _():
         with reactive.isolate():
             if not input.auto_converse() or most_recent() == 2:
                 return
 
-        last_message = session_messages2()[-1]
+        last_message = chat_session2.messages()[-1]
         if last_message["role"] == "assistant":
-            ask_question1(last_message["content"], input.auto_converse_delay())
+            chat_session1.ask(
+                last_message["content"],
+                input.auto_converse_delay(),
+            )
             most_recent.set(2)
 
 

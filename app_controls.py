@@ -100,7 +100,7 @@ app_ui = ui.page_fluid(
 
 
 def server(input: Inputs, output: Outputs, session: Session):
-    session_messages1, _ = chat.chat_server(
+    chat_session = chat.chat_server(
         "chat1",
         model=input.model,
         system_prompt=input.system_prompt,
@@ -119,14 +119,14 @@ def server(input: Inputs, output: Outputs, session: Session):
     def download_conversation() -> Generator[str, None, None]:
         res: list[dict[str, str]] = []
         if input.download_format() == "JSON":
-            for message in session_messages1():
+            for message in chat_session.messages():
                 # Copy over `role` and `content`, but not `content_html`.
                 message_copy = {"role": message["role"], "content": message["content"]}
                 res.append(message_copy)
             yield json.dumps(res, indent=2)
 
         else:
-            yield chat_messages_to_md(session_messages1())
+            yield chat_messages_to_md(chat_session.messages())
 
 
 app = App(app_ui, server)
