@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import json
-from datetime import datetime
-from typing import Generator, Sequence
-
 from shiny import App, Inputs, Outputs, Session, reactive, ui
 
 import chat
-import openai_api
 
 # Code for initializing popper.js tooltips.
 tooltip_init_js = """
@@ -60,14 +55,6 @@ app_ui = ui.page_fluid(
                     max=3,
                     value=1,
                     step=0.2,
-                ),
-                ui.hr(),
-                ui.p(ui.h5("Export conversation")),
-                ui.input_radio_buttons(
-                    "download_format", None, ["Markdown", "JSON"], inline=True
-                ),
-                ui.div(
-                    ui.download_button("download_conversation", "Download"),
                 ),
                 ui.hr(),
                 ui.p(
@@ -126,57 +113,5 @@ def server(input: Inputs, output: Outputs, session: Session):
             ask_question1(last_message["content"], input.auto_converse_delay())
             most_recent.set(2)
 
-    def download_conversation_filename() -> str:
-        if input.download_format() == "JSON":
-            ext = "json"
-        else:
-            ext = "md"
-        return f"conversation-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.{ext}"
-
-    @session.download(filename=download_conversation_filename)
-    def download_conversation() -> Generator[str, None, None]:
-        res: list[dict[str, str]] = []
-        if input.download_format() == "JSON":
-            for message in session_messages1():
-                # Copy over `role` and `content`, but not `content_html`.
-                message_copy = {"role": message["role"], "content": message["content"]}
-                res.append(message_copy)
-            yield json.dumps(res, indent=2)
-
-        else:
-            yield chat_messages_to_md(session_messages1())
-
 
 app = App(app_ui, server)
-
-# ======================================================================================
-# Utility functions
-# ======================================================================================
-
-
-def chat_messages_to_md(messages: Sequence[openai_api.ChatMessage]) -> str:
-    """
-    Convert a list of ChatMessage objects to a Markdown string.
-
-    Parameters
-    ----------
-    messages
-        A list of ChatMessageobjects.
-
-    Returns
-    -------
-    str
-        A Markdown string representing the conversation.
-    """
-    res = ""
-
-    for message in messages:
-        if message["role"] == "system":
-            # Don't show system messages.
-            continue
-
-        res += f"## {message['role'].capitalize()}\n\n"
-        res += message["content"]
-        res += "\n\n"
-
-    return res

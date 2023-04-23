@@ -20,7 +20,7 @@
     if (target.matches(".shiny-gpt-chat textarea")) {
       // Automatically resize the textarea to fit its content.
       target.style.height = "auto";
-      target.style.height = queryTextArea.scrollHeight + "px";
+      target.style.height = target.scrollHeight + "px";
     }
   });
 })();
