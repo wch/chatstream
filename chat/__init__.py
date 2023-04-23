@@ -9,8 +9,8 @@ from typing import AsyncGenerator, Awaitable, Callable, Literal, TypeVar, cast
 
 import openai
 import tiktoken
-from shiny import Inputs, Outputs, Session, module, reactive, render, ui
 from htmltools import HTMLDependency
+from shiny import Inputs, Outputs, Session, module, reactive, render, ui
 
 import openai_api
 
@@ -253,7 +253,7 @@ def chat_server(
 
     async def delayed_set_query(query: str, delay: float) -> None:
         await asyncio.sleep(delay)
-        async with reactive.lock():
+        async with reactive._core.lock():
             ui.update_text_area("query", value=query, session=session)
             await reactive.flush()
 
@@ -262,7 +262,7 @@ def chat_server(
 
     async def delayed_new_query_trigger(delay: float) -> None:
         await asyncio.sleep(delay)
-        async with reactive.lock():
+        async with reactive._core.lock():
             ask_trigger.set(ask_trigger() + 1)
             await reactive.flush()
 
