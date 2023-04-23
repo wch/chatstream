@@ -1,0 +1,33 @@
+.shiny-gpt-chat textarea.form-control {
+    margin-top: 10px;
+    resize: none;
+    overflow-y: hidden;
+}
+.shiny-gpt-chat pre, code {
+    background-color: #eeeeee;
+}
+.shiny-gpt-chat .shiny-html-output p:last-child {
+    /* No space after last paragraph in a message */
+    margin-bottom: 0;
+}
+.shiny-gpt-chat .shiny-html-output pre code {
+    /* Fix alignment of first line in a code block */
+    padding: 0;
+}
+.shiny-gpt-chat .user-message {
+    border-radius: 4px;
+    padding: 5px;
+    margin-top: 10px;
+    border: 1px solid #dddddd;
+    background-color: #ffffff;
+}
+.shiny-gpt-chat .assistant-message {
+    border-radius: 4px;
+    padding: 5px;
+    margin-top: 10px;
+    border: 1px solid #dddddd;
+    background-color: #f0f0f0;
+}
+.shiny-gpt-chat textarea {
+    height: auto;
+}
