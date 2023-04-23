@@ -80,9 +80,7 @@ def chat_server(
     throttle = wrap_function_nonreactive(throttle)
 
     # If query_preprocessor is not async, wrap it in an async function.
-    query_preprocessor = cast(
-        Callable[[str], Awaitable[str]], wrap_async(query_preprocessor)
-    )
+    query_preprocessor = wrap_async(query_preprocessor)
 
     # This contains a tuple of the most recent messages when a streaming response is
     # coming in. When not streaming, this is set to an empty tuple.
@@ -342,7 +340,7 @@ def is_async_callable(
 
 
 def wrap_async(
-    fn: Callable[P, Awaitable[T]] | Callable[P, T]
+    fn: Callable[P, T] | Callable[P, Awaitable[T]]
 ) -> Callable[P, Awaitable[T]]:
     """
     Given a synchronous function that returns T, return an async function that wraps the
