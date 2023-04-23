@@ -241,7 +241,7 @@ def chat_server(
         # separate task so that the data can come in without need to await it in this
         # Task (which would block other computation to happen, like running reactive
         # stuff).
-        asyncio.Task(
+        asyncio.create_task(
             stream_to_reactive(
                 openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
                     model=openai_model(),
@@ -321,7 +321,7 @@ def chat_server(
         )
 
     def ask_question(query: str, delay: float = 1) -> None:
-        asyncio.Task(delayed_set_query(query, delay))
+        asyncio.create_task(delayed_set_query(query, delay))
 
     async def delayed_set_query(query: str, delay: float) -> None:
         await asyncio.sleep(delay)
@@ -330,7 +330,7 @@ def chat_server(
             await reactive.flush()
 
         # Short delay before triggering ask_trigger.
-        asyncio.Task(delayed_new_query_trigger(0.2))
+        asyncio.create_task(delayed_new_query_trigger(0.2))
 
     async def delayed_new_query_trigger(delay: float) -> None:
         await asyncio.sleep(delay)
