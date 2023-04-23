@@ -117,7 +117,6 @@ def chat_server(
 
     ask_trigger = reactive.Value(0)
 
-    @reactive.Calc
     def system_prompt_message() -> ChatMessageEnriched:
         return {
             "role": "system",
