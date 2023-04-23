@@ -63,25 +63,21 @@ def chat_server(
     openai_model: OpenAiModels | Callable[[], OpenAiModels] = DEFAULT_MODEL,
     system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
     temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
+    throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
     query_preprocessor: Callable[[str], str]
     | Callable[[str], Awaitable[str]] = lambda x: x,
-    throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
 ) -> tuple[
     reactive.Value[tuple[ChatMessageEnriched, ...]], Callable[[str, float], None]
 ]:
     # Ensure these are functions, even if we were passed static values.
-    if not callable(openai_model):
-        openai_model_value = openai_model
-        openai_model = lambda: openai_model_value  # noqa: E731
-    if not callable(system_prompt):
-        system_prompt_value = system_prompt
-        system_prompt = lambda: system_prompt_value  # noqa: E731
-    if not callable(temperature):
-        temperature_value = temperature
-        temperature = lambda: temperature_value  # noqa: E731
-    if not callable(throttle):
-        throttle_value = throttle
-        throttle = lambda: throttle_value  # noqa: E731
+    openai_model = cast(
+        # pyright needs a little help with this.
+        Callable[[], OpenAiModels],
+        wrap_function_nonreactive(openai_model),
+    )
+    system_prompt = wrap_function_nonreactive(system_prompt)
+    temperature = wrap_function_nonreactive(temperature)
+    throttle = wrap_function_nonreactive(throttle)
 
     # If query_preprocessor is not async, wrap it in an async function.
     query_preprocessor = cast(
@@ -358,6 +354,28 @@ def wrap_async(
         return fn(*args, **kwargs)
 
     return fn_async
+
+
+def wrap_function_nonreactive(x: T | Callable[[], T]) -> Callable[[], T]:
+    """
+    This function is used to normalize three types of things so they are wrapped in the
+    same kind of object:
+
+    - A value
+    - A non-reactive function that return a value
+    - A reactive function that returns a value
+
+    All of these will be wrapped in a non-reactive function that returns a value.
+    """
+    if not callable(x):
+        return lambda: x
+
+    @functools.wraps(x)
+    def fn_nonreactive() -> T:
+        with reactive.isolate():
+            return x()
+
+    return fn_nonreactive
 
 
 def _chat_dependency():
