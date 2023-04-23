@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import inspect
+import sys
 import time
-from typing import (
-    AsyncGenerator,
-    Awaitable,
-    Callable,
-    Literal,
-    TypeGuard,
-    TypeVar,
-    cast,
-)
+from typing import AsyncGenerator, Awaitable, Callable, Literal, TypeVar, cast
 
 import openai
-import openai_api
 import tiktoken
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
+
+import openai_api
+
+if sys.version_info < (3, 10):
+    from typing_extensions import ParamSpec, TypeGuard
+else:
+    from typing import ParamSpec, TypeGuard
 
 OpenAiModels = Literal[
     "gpt-3.5-turbo",
@@ -155,14 +155,9 @@ def chat_server(
         throttle = lambda: throttle_value  # noqa: E731
 
     # If query_preprocessor is not async, wrap it in an async function.
-    if not is_async_callable(query_preprocessor):
-        # A bit of awkward stuff with casting and naming to make the linter happy.
-        query_preprocessor_orig = cast(Callable[[str], str], query_preprocessor)
-
-        async def query_preprocessor_async(query: str) -> str:
-            return query_preprocessor_orig(query)
-
-        query_preprocessor = query_preprocessor_async
+    query_preprocessor = cast(
+        Callable[[str], Awaitable[str]], wrap_async(query_preprocessor)
+    )
 
     # This contains a tuple of the most recent messages when a streaming response is
     # coming in. When not streaming, this is set to an empty tuple.
@@ -357,6 +352,7 @@ def get_token_count(s: str, model: OpenAiModels) -> int:
 
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 async def stream_to_reactive(
@@ -396,8 +392,8 @@ def chat_message_enriched_to_chat_message(
 
 
 def is_async_callable(
-    obj: Callable[..., T] | Callable[..., Awaitable[T]]
-) -> TypeGuard[Callable[..., Awaitable[T]]]:
+    obj: Callable[P, T] | Callable[P, Awaitable[T]]
+) -> TypeGuard[Callable[P, Awaitable[T]]]:
     """
     Returns True if `obj` is an `async def` function, or if it's an object with a
     `__call__` method which is an `async def` function. This function should generally
@@ -410,3 +406,23 @@ def is_async_callable(
             return True
 
     return False
+
+
+def wrap_async(
+    fn: Callable[P, Awaitable[T]] | Callable[P, T]
+) -> Callable[P, Awaitable[T]]:
+    """
+    Given a synchronous function that returns T, return an async function that wraps the
+    original function. If the input function is already async, then return it unchanged.
+    """
+
+    if is_async_callable(fn):
+        return fn
+
+    fn = cast(Callable[P, T], fn)
+
+    @functools.wraps(fn)
+    async def fn_async(*args: P.args, **kwargs: P.kwargs) -> T:
+        return fn(*args, **kwargs)
+
+    return fn_async
