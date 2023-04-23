@@ -166,6 +166,13 @@ def chat_server(
         # streaming is happening.
         streaming_chat_string_pieces.set(("",))
 
+        # Prepend system prompt, and convert enriched chat messages to chat messages
+        # without extra fields.
+        session_messages_with_sys_prompt: list[openai_api.ChatMessage] = [
+            chat_message_enriched_to_chat_message(msg)
+            for msg in ((system_prompt_message(),) + session_messages())
+        ]
+
         # Launch a Task that updates the chat string asynchronously. We run this in a
         # separate task so that the data can come in without need to await it in this
         # Task (which would block other computation to happen, like running reactive
@@ -174,10 +181,7 @@ def chat_server(
             stream_to_reactive(
                 openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
                     model=openai_model(),
-                    messages=[
-                        chat_message_enriched_to_chat_message(msg)
-                        for msg in ((system_prompt_message(),) + session_messages())
-                    ],
+                    messages=session_messages_with_sys_prompt,
                     stream=True,
                     temperature=temperature(),
                 ),
