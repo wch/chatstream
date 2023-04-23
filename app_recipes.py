@@ -15,6 +15,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     chat.chat_server(
         "chat1",
         system_prompt=recipe_prompt,
+        temperature=0,
         query_preprocessor=webscraper.scrape_page,
     )
 
