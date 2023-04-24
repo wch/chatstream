@@ -33,8 +33,8 @@ else:
 T = TypeVar("T")
 P = ParamSpec("P")
 
-# A place to keep references to Tasks so they don't get GC'd prematurely, as
-# directed in asyncio.create_task docs
+# A place to keep references to Tasks so they don't get GC'd prematurely, as directed in
+# asyncio.create_task docs
 running_tasks: set[asyncio.Task[Any]] = set()
 
 
@@ -60,9 +60,8 @@ DEFAULT_TEMPERATURE = 0.7
 DEFAULT_THROTTLE = 0.1
 
 
-# A customized version of ChatMessage, with a field for the Markdown `content`
-# converted to HTML, and a field for counting the number of tokens in the
-# message.
+# A customized version of ChatMessage, with a field for the Markdown `content` converted
+# to HTML, and a field for counting the number of tokens in the message.
 class ChatMessageEnriched(openai_api.ChatMessage):
     content_preprocessed: str
     content_html: str
@@ -124,21 +123,21 @@ def chat_server(
     # If query_preprocessor is not async, wrap it in an async function.
     query_preprocessor = wrap_async(query_preprocessor)
 
-    # This contains a tuple of the most recent messages when a streaming
-    # response is coming in. When not streaming, this is set to an empty tuple.
+    # This contains a tuple of the most recent messages when a streaming response is
+    # coming in. When not streaming, this is set to an empty tuple.
     streaming_chat_messages_batch: reactive.Value[
         tuple[openai_api.ChatCompletionStreaming, ...]
     ] = reactive.Value(tuple())
 
-    # This is the current streaming chat string, in the form of a tuple of
-    # strings, one string from each message. When not streaming, it is empty.
-    streaming_chat_string_pieces: reactive.Value[
-        tuple[str, ...]
-    ] = reactive.Value(tuple())
+    # This is the current streaming chat string, in the form of a tuple of strings, one
+    # string from each message. When not streaming, it is empty.
+    streaming_chat_string_pieces: reactive.Value[tuple[str, ...]] = reactive.Value(
+        tuple()
+    )
 
-    session_messages: reactive.Value[
-        tuple[ChatMessageEnriched, ...]
-    ] = reactive.Value(tuple())
+    session_messages: reactive.Value[tuple[ChatMessageEnriched, ...]] = reactive.Value(
+        tuple()
+    )
 
     ask_trigger = reactive.Value(0)
 
@@ -164,12 +163,11 @@ def chat_server(
                 )
 
             if message["choices"][0]["finish_reason"] == "stop":
-                # If we got here, we know that streaming_chat_string is not
-                # None.
+                # If we got here, we know that streaming_chat_string is not None.
                 current_message = "".join(streaming_chat_string_pieces())
 
-                # Update session_messages. We need to make a copy to trigger a
-                # reactive invalidation.
+                # Update session_messages. We need to make a copy to trigger a reactive
+                # invalidation.
                 last_message: ChatMessageEnriched = {
                     "content_preprocessed": current_message,
                     "content": current_message,
@@ -202,21 +200,17 @@ def chat_server(
         # streaming is happening.
         streaming_chat_string_pieces.set(("",))
 
-        # Prepend system prompt, and convert enriched chat messages to chat
-        # messages without extra fields.
-        session_messages_with_sys_prompt = (
-            chat_messages_enriched_to_chat_messages(
-                ((system_prompt_message(),) + session_messages())
-            )
+        # Prepend system prompt, and convert enriched chat messages to chat messages
+        # without extra fields.
+        session_messages_with_sys_prompt = chat_messages_enriched_to_chat_messages(
+            ((system_prompt_message(),) + session_messages())
         )
 
-        # Launch a Task that updates the chat string asynchronously. We run this
-        # in a separate task so that the data can come in without need to await
-        # it in this Task (which would block other computation to happen, like
-        # running reactive stuff).
-        messages: StreamResult[
-            openai_api.ChatCompletionStreaming
-        ] = stream_to_reactive(
+        # Launch a Task that updates the chat string asynchronously. We run this in a
+        # separate task so that the data can come in without need to await it in this
+        # Task (which would block other computation to happen, like running reactive
+        # stuff).
+        messages: StreamResult[openai_api.ChatCompletionStreaming] = stream_to_reactive(
             openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
                 model=model(),
                 messages=session_messages_with_sys_prompt,
@@ -253,9 +247,9 @@ def chat_server(
     def current_streaming_message_ui():
         pieces = streaming_chat_string_pieces()
 
-        # Only display this content while streaming. Once the streaming is done,
-        # this content will disappear and an identical-looking one will be added
-        # to the `session_messages_ui` output.
+        # Only display this content while streaming. Once the streaming is done, this
+        # content will disappear and an identical-looking one will be added to the
+        # `session_messages_ui` output.
         if len(pieces) == 0:
             return ui.div()
 
@@ -289,13 +283,12 @@ def chat_server(
                 ui.input_action_button("ask", "Ask"),
             ),
             ui.tags.script(
-                # The explicit focus() call is needed so that the user can type
-                # the next question without clicking on the query box again.
-                # However, it's a bit too aggressive, because it will steal
-                # focus if, while the answer is streaming, the user clicks
-                # somewhere else. It would be better to have the query box set
-                # to `display: none` while the answer streams and then unset
-                # afterward, so that it can keep focus, but won't steal focus.
+                # The explicit focus() call is needed so that the user can type the next
+                # question without clicking on the query box again. However, it's a bit
+                # too aggressive, because it will steal focus if, while the answer is
+                # streaming, the user clicks somewhere else. It would be better to have
+                # the query box set to `display: none` while the answer streams and then
+                # unset afterward, so that it can keep focus, but won't steal focus.
                 "document.getElementById('%s').focus();"
                 % module.resolve_id("query")
             ),
@@ -336,27 +329,27 @@ class StreamResult(Generic[T]):
     _read: Callable[[], tuple[T, ...]]
     _cancel: Callable[[], bool]
 
-    def __init__(
-        self, read: Callable[[], tuple[T, ...]], cancel: Callable[[], bool]
-    ):
+    def __init__(self, read: Callable[[], tuple[T, ...]], cancel: Callable[[], bool]):
         self._read = read
         self._cancel = cancel
 
     def __call__(self) -> tuple[T, ...]:
-        """Perform a reactive read of the stream. You'll get the latest value,
-        and you will receive an invalidation if a new value becomes
-        available."""
+        """
+        Perform a reactive read of the stream. You'll get the latest value, and you will
+        receive an invalidation if a new value becomes available.
+        """
 
         return self._read()
 
     def cancel(self) -> bool:
-        """Stop the underlying stream from being consumed. Returns False if
-        the task is already done or cancelled."""
+        """
+        Stop the underlying stream from being consumed. Returns False if the task is
+        already done or cancelled.
+        """
         return self._cancel()
 
 
-# Converts an async generator of type T into a reactive source of type
-# tuple[T, ...].
+# Converts an async generator of type T into a reactive source of type tuple[T, ...].
 def stream_to_reactive(
     func: AsyncGenerator[T, None] | Awaitable[AsyncGenerator[T, None]],
     throttle: float = 0,
@@ -410,9 +403,9 @@ def is_async_callable(
     obj: Callable[P, T] | Callable[P, Awaitable[T]]
 ) -> TypeGuard[Callable[P, Awaitable[T]]]:
     """
-    Returns True if `obj` is an `async def` function, or if it's an object with
-    a `__call__` method which is an `async def` function. This function should
-    generally be used in this code base instead of iscoroutinefunction().
+    Returns True if `obj` is an `async def` function, or if it's an object with a
+    `__call__` method which is an `async def` function. This function should generally
+    be used in this code base instead of iscoroutinefunction().
     """
     if inspect.iscoroutinefunction(obj):
         return True
@@ -427,9 +420,8 @@ def wrap_async(
     fn: Callable[P, T] | Callable[P, Awaitable[T]]
 ) -> Callable[P, Awaitable[T]]:
     """
-    Given a synchronous function that returns T, return an async function that
-    wraps the original function. If the input function is already async, then
-    return it unchanged.
+    Given a synchronous function that returns T, return an async function that wraps the
+    original function. If the input function is already async, then return it unchanged.
     """
 
     if is_async_callable(fn):
@@ -446,15 +438,14 @@ def wrap_async(
 
 def wrap_function_nonreactive(x: T | Callable[[], T]) -> Callable[[], T]:
     """
-    This function is used to normalize three types of things so they are wrapped
-    in the same kind of object:
+    This function is used to normalize three types of things so they are wrapped in the
+    same kind of object:
 
     - A value
     - A non-reactive function that return a value
     - A reactive function that returns a value
 
-    All of these will be wrapped in a non-reactive function that returns a
-    value.
+    All of these will be wrapped in a non-reactive function that returns a value.
     """
     if not callable(x):
         return lambda: x
