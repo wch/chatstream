@@ -13,8 +13,10 @@ from typing import (
     Coroutine,
     Generic,
     Literal,
+    Optional,
     Sequence,
     TypeVar,
+    Union,
     cast,
 )
 
@@ -98,6 +100,9 @@ def chat_ui() -> ui.Tag:
     )
 
 
+Renderer = Union[Callable[[str], str], Callable[[str], Awaitable[str]]]
+
+
 @module.server
 def chat_server(
     input: Inputs,
@@ -108,8 +113,12 @@ def chat_server(
     system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
     temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
     throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
-    query_preprocessor: Callable[[str], str]
-    | Callable[[str], Awaitable[str]] = lambda x: x,
+    query_preprocessor: Union[
+        Callable[[str], str], Callable[[str], Awaitable[str]]
+    ] = lambda x: x,
+    input_renderer: Renderer = ui.markdown,
+    output_renderer: Renderer = ui.markdown,
+    streaming_output_renderer: Renderer = ui.markdown,
 ) -> ChatSession:
     # Ensure these are functions, even if we were passed static values.
     model = cast(
@@ -123,6 +132,10 @@ def chat_server(
 
     # If query_preprocessor is not async, wrap it in an async function.
     query_preprocessor = wrap_async(query_preprocessor)
+    # Same with input/output renderers.
+    input_renderer = wrap_async(input_renderer)
+    output_renderer = wrap_async(output_renderer)
+    streaming_output_renderer = wrap_async(streaming_output_renderer)
 
     # This contains a tuple of the most recent messages when a streaming response is
     # coming in. When not streaming, this is set to an empty tuple.
@@ -153,7 +166,7 @@ def chat_server(
 
     @reactive.Effect
     @reactive.event(streaming_chat_messages_batch)
-    def finalize_streaming_result():
+    async def finalize_streaming_result():
         current_batch = streaming_chat_messages_batch()
 
         for message in current_batch:
@@ -173,7 +186,7 @@ def chat_server(
                     "content_preprocessed": current_message,
                     "content": current_message,
                     "role": "assistant",
-                    "content_html": ui.markdown(current_message),
+                    "content_html": await output_renderer(current_message),
                     "token_count": get_token_count(current_message, model()),
                 }
                 session_messages.set(session_messages() + (last_message,))
@@ -192,7 +205,7 @@ def chat_server(
             "content_preprocessed": input.query(),
             "content": query_processed,
             "role": "user",
-            "content_html": ui.markdown(input.query()),
+            "content_html": await input_renderer(input.query()),
             "token_count": get_token_count(query_processed, model()),
         }
         session_messages.set(session_messages() + (last_message,))
@@ -223,6 +236,7 @@ def chat_server(
 
         @reactive.Effect
         def copy_messages_to_batch():
+            # TODO: messages() can raise an exception; handle it
             streaming_chat_messages_batch.set(messages())
 
     @output
@@ -245,7 +259,7 @@ def chat_server(
 
     @output
     @render.ui
-    def current_streaming_message_ui():
+    async def current_streaming_message_ui():
         pieces = streaming_chat_string_pieces()
 
         # Only display this content while streaming. Once the streaming is done, this
@@ -258,7 +272,7 @@ def chat_server(
         if content == "":
             content = "\u2026"  # zero-width string
         else:
-            content = ui.markdown(content)
+            content = await streaming_output_renderer(content)
 
         return ui.div({"class": "assistant-message"}, content)
 
@@ -355,37 +369,54 @@ def stream_to_reactive(
     func: AsyncGenerator[T, None] | Awaitable[AsyncGenerator[T, None]],
     throttle: float = 0,
 ) -> StreamResult[T]:
-    val: reactive.Value[tuple[T, ...]] = reactive.Value(tuple())
+    val: reactive.Value[tuple[T, ...] | Exception] = reactive.Value(tuple())
 
     async def task_main():
         nonlocal func
         if inspect.isawaitable(func):
-            func = await func  # type: ignore
+            try:
+                func = await func  # type: ignore
+            except Exception as err:
+                val.set(err)
+                return
         func = cast(AsyncGenerator[T, None], func)
 
         last_message_time = time.time()
         message_batch: list[T] = []
+        error: Optional[Exception] = None
+        try:
+            async for message in func:
+                message_batch.append(message)
 
-        async for message in func:
-            message_batch.append(message)
+                if time.time() - last_message_time > throttle:
+                    async with reactive.lock():
+                        val.set(tuple(message_batch))
+                        await reactive.flush()
 
-            if time.time() - last_message_time > throttle:
-                async with reactive.lock():
-                    val.set(tuple(message_batch))
-                    await reactive.flush()
-
-                last_message_time = time.time()
-                message_batch = []
+                    last_message_time = time.time()
+                    message_batch = []
+        except Exception as err:
+            error = err
 
         # Once the stream has ended, flush the remaining messages.
         if len(message_batch) > 0:
             async with reactive.lock():
                 val.set(tuple(message_batch))
                 await reactive.flush()
+        if error:
+            val.set(error)
+            await reactive.flush()
 
     task = safe_create_task(task_main())
 
-    return StreamResult(val.get, lambda: task.cancel())
+    def getter() -> tuple[T, ...]:
+        result = val.get()
+        if isinstance(result, Exception):
+            raise result
+        else:
+            return result
+
+    return StreamResult(getter, lambda: task.cancel())
 
 
 def chat_message_enriched_to_chat_message(

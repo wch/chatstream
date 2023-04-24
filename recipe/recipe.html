@@ -1,0 +1,37 @@
+<div class="card recipe bg-white mx-auto" style="max-width: 480px">
+  <div class="card-body">
+    <h3 class="card-title mt-0">{{title}}</h3>
+    {% if tags %}
+    <div class="recipe-tags">
+      {% for tag in tags %}
+      <span class="badge bg-secondary">{{tag}}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="summary pt-3">
+      {% if servings %}Servings: {{servings}}<br />{% endif %} {% if prep_time
+      %}Prep time: {{prep_time}} min<br />{% endif %} {% if cook_time %}Cook
+      time: {{cook_time}} min<br />{% endif %} {% if total_time %}Total time:
+      {{total_time}} min<br />{% endif %}
+    </div>
+
+    <h5>Ingredients</h5>
+    <ul>
+      {% for key, value in ingredients.items() %}
+      <li>{{value}} <strong>{{key}}</strong></li>
+      {% endfor %}
+    </ul>
+
+    <h5>Directions</h5>
+    <ol>
+      {% for step in directions %}
+      <li>{{step}}</li>
+      {% endfor %}
+    </ol>
+  </div>
+  <div class="card-footer">
+    <h6 class="mt-0">Source</h6>
+    <div><a href="{{source}}" target="_blank">{{source}}</a></div>
+  </div>
+</div>
