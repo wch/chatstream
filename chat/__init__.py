@@ -63,10 +63,8 @@ class ChatSession:
 
 @module.ui
 def chat_ui() -> ui.Tag:
-    id = module.resolve_id("chat_module")
-
     return ui.div(
-        {"id": id, "class": "shiny-gpt-chat"},
+        {"class": "shiny-gpt-chat"},
         _chat_dependency(),
         ui.output_ui("session_messages_ui"),
         ui.output_ui("current_streaming_message_ui"),
