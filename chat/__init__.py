@@ -103,6 +103,7 @@ def chat_server(
     input: Inputs,
     output: Outputs,
     session: Session,
+    *,
     model: OpenAiModels | Callable[[], OpenAiModels] = DEFAULT_MODEL,
     system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
     temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
