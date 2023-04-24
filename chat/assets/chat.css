@@ -3,6 +3,7 @@
   margin-top: 10px;
   resize: none;
   overflow-y: hidden;
+  height: auto;
 }
 .shiny-gpt-chat textarea.form-control:disabled {
   /* Don't gray-out textarea when disabled. */
@@ -32,7 +33,4 @@
   margin-top: 10px;
   border: 1px solid #dddddd;
   background-color: #f0f0f0;
-}
-.shiny-gpt-chat textarea {
-  height: auto;
 }
