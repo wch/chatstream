@@ -1,0 +1,28 @@
+{
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "python.formatting.provider": "black",
+  "python.linting.flake8Enabled": true,
+  "editor.tabSize": 2,
+  "files.encoding": "utf8",
+  "files.eol": "\n",
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.tabSize": 4,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": true
+    },
+    "editor.rulers": [88]
+  },
+  "isort.args": ["--profile", "black"],
+  "files.exclude": {
+    "**/__pycache__": true,
+    "build/**": true,
+    "/venv": true
+  },
+  "autoDocstring.guessTypes": false,
+  "search.exclude": {
+    "build/**": true
+  },
+  "flake8.args": ["--ignore=E501,W503,E203"]
+}
