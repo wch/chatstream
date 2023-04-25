@@ -37,25 +37,11 @@ app_ui = ui.page_fluid(
                 ui.h4("Shiny Document Query"),
                 ui.hr(),
                 ui.input_file("file", "Upload a text or PDF file"),
-                ui.hr(),
-                {"class": "sticky-sm-top", "style": "top: 15px;"},
-                ui.input_select("model", "Model", choices=["gpt-3.5-turbo"]),
                 ui.input_slider(
-                    "temperature",
-                    ui.span(
-                        "Temperature",
-                        {
-                            "data-bs-toggle": "tooltip",
-                            "data-bs-placement": "left",
-                            "title": "Lower values are more deterministic. Higher values are more random and unpredictable.",
-                        },
-                    ),
-                    min=0,
-                    max=2,
-                    value=0.7,
-                    step=0.05,
+                    "n_documents", "Number of context documents", min=2, max=12, value=8
                 ),
                 ui.hr(),
+                {"class": "sticky-sm-top", "style": "top: 15px;"},
                 ui.p(ui.h5("Export conversation")),
                 ui.input_radio_buttons(
                     "download_format", None, ["Markdown", "JSON"], inline=True
@@ -94,19 +80,25 @@ def server(input: Inputs, output: Outputs, session: Session):
     )
 
     def add_context_to_query(query: str) -> str:
-        results = collection.query(query_texts=[query], n_results=8)
+        results = collection.query(
+            query_texts=[query],
+            n_results=min(collection.count(), input.n_documents()),
+        )
         if results["documents"] is None:
             context = "No context found"
         else:
             context = "\n\n".join(results["documents"][0])
 
-        prompt_template = f"""Use the following pieces of context to answer the question at the end.
+        prompt_template = f"""Use these pieces of context to answer the question at the end.
+        You can also integrate other information that you know.
         If you don't know the answer, just say that you don't know; don't try to make up an answer.
 
         {context}
 
         Question: {query}
-        Helpful Answer:"""
+
+        Answer:
+        """
 
         print(json.dumps(results, indent=2))
         print(prompt_template)
@@ -115,9 +107,8 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     chat_session = chat.chat_server(
         "chat1",
-        model=input.model,
-        temperature=input.temperature,
         query_preprocessor=add_context_to_query,
+        print_request=True,
     )
 
     @reactive.Effect
@@ -125,8 +116,6 @@ def server(input: Inputs, output: Outputs, session: Session):
         file_infos = cast(list[FileInfo], input.file())
         if not file_infos:
             return
-
-        print(file_infos[0])
 
         text = extract_text_from_pdf(file_infos[0]["datapath"])
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import inspect
+import json
 import sys
 import time
 from typing import (
@@ -14,6 +15,7 @@ from typing import (
     Generic,
     Literal,
     Sequence,
+    TypedDict,
     TypeVar,
     cast,
 )
@@ -59,11 +61,21 @@ DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_THROTTLE = 0.1
 
+MAX_TOKENS = 4096
+
 
 # A customized version of ChatMessage, with a field for the Markdown `content` converted
 # to HTML, and a field for counting the number of tokens in the message.
-class ChatMessageEnriched(openai_api.ChatMessage):
-    content_preprocessed: str
+class ChatMessageEnriched(TypedDict):
+    role: Literal["system", "user", "assistant"]
+
+    # This is the string that the user typed. (It may be run through the
+    # `query_preprocessor`` to produce a different string when actually submitting the
+    # query.
+    content: str
+
+    # The HTML version of the message. This is what is displayed in the chat UI. It is
+    # usually the result of running `ui.markdown(content)`.
     content_html: str
     token_count: int
 
@@ -110,6 +122,7 @@ def chat_server(
     throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
     query_preprocessor: Callable[[str], str]
     | Callable[[str], Awaitable[str]] = lambda x: x,
+    print_request: bool = False,
 ) -> ChatSession:
     # Ensure these are functions, even if we were passed static values.
     model = cast(
@@ -145,7 +158,6 @@ def chat_server(
     def system_prompt_message() -> ChatMessageEnriched:
         return {
             "role": "system",
-            "content_preprocessed": system_prompt(),
             "content": system_prompt(),
             "content_html": "",
             "token_count": get_token_count(system_prompt(), model()),
@@ -165,18 +177,17 @@ def chat_server(
 
             if message["choices"][0]["finish_reason"] == "stop":
                 # If we got here, we know that streaming_chat_string is not None.
-                current_message = "".join(streaming_chat_string_pieces())
+                current_message_str = "".join(streaming_chat_string_pieces())
 
                 # Update session_messages. We need to make a copy to trigger a reactive
                 # invalidation.
-                last_message: ChatMessageEnriched = {
-                    "content_preprocessed": current_message,
-                    "content": current_message,
+                current_message: ChatMessageEnriched = {
+                    "content": current_message_str,
                     "role": "assistant",
-                    "content_html": ui.markdown(current_message),
-                    "token_count": get_token_count(current_message, model()),
+                    "content_html": ui.markdown(current_message_str),
+                    "token_count": get_token_count(current_message_str, model()),
                 }
-                session_messages.set(session_messages() + (last_message,))
+                session_messages.set(session_messages() + (current_message,))
                 streaming_chat_string_pieces.set(tuple())
                 return
 
@@ -186,26 +197,53 @@ def chat_server(
         if input.query() == "":
             return
 
-        query_processed = await query_preprocessor(input.query())
+        # All previous messages, before we add the new query.
+        prev_session_messages = session_messages()
 
-        last_message: ChatMessageEnriched = {
-            "content_preprocessed": input.query(),
-            "content": query_processed,
+        # First, add the current query to the session history.
+        current_message: ChatMessageEnriched = {
+            "content": input.query(),
             "role": "user",
             "content_html": ui.markdown(input.query()),
-            "token_count": get_token_count(query_processed, model()),
+            "token_count": get_token_count(input.query(), model()),
         }
-        session_messages.set(session_messages() + (last_message,))
+        session_messages.set(prev_session_messages + (current_message,))
 
-        # Set this to a non-empty tuple (with a blank string), to indicate that
-        # streaming is happening.
-        streaming_chat_string_pieces.set(("",))
-
-        # Prepend system prompt, and convert enriched chat messages to chat messages
-        # without extra fields.
-        session_messages_with_sys_prompt = chat_messages_enriched_to_chat_messages(
-            ((system_prompt_message(),) + session_messages())
+        # For the query we're about to send, we need to run the current message through
+        # the preprocessor.
+        current_message_preprocessed: ChatMessageEnriched = current_message.copy()
+        current_message_preprocessed["content"] = await query_preprocessor(
+            current_message_preprocessed["content"]
         )
+        current_message_preprocessed["token_count"] = get_token_count(
+            current_message_preprocessed["content"], model()
+        )
+
+        # Turn it the set of messages into a list, then we'll go backward through the
+        # list and keep messages until we hit the token limit.
+        session_messages2 = list(prev_session_messages)
+        session_messages2.append(current_message_preprocessed)
+
+        # Count tokens, going backward.
+        outgoing_messages: list[ChatMessageEnriched] = []
+        tokens_total = system_prompt_message()["token_count"]
+        for message in reversed(session_messages2):
+            if tokens_total + message["token_count"] > MAX_TOKENS:
+                break
+            else:
+                tokens_total += message["token_count"]
+                outgoing_messages.append(message)
+
+        outgoing_messages.append(system_prompt_message())
+        outgoing_messages.reverse()
+
+        outgoing_messages_normalized = chat_messages_enriched_to_chat_messages(
+            outgoing_messages
+        )
+
+        if print_request:
+            print(json.dumps(outgoing_messages_normalized, indent=2))
+            print(f"TOKENS USED: {tokens_total}")
 
         # Launch a Task that updates the chat string asynchronously. We run this in a
         # separate task so that the data can come in without need to await it in this
@@ -214,12 +252,16 @@ def chat_server(
         messages: StreamResult[openai_api.ChatCompletionStreaming] = stream_to_reactive(
             openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
                 model=model(),
-                messages=session_messages_with_sys_prompt,
+                messages=outgoing_messages_normalized,
                 stream=True,
                 temperature=temperature(),
             ),
             throttle=throttle(),
         )
+
+        # Set this to a non-empty tuple (with a blank string), to indicate that
+        # streaming is happening.
+        streaming_chat_string_pieces.set(("",))
 
         @reactive.Effect
         def copy_messages_to_batch():
