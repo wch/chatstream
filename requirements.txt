@@ -2,3 +2,7 @@ shiny
 openai
 tiktoken
 aiohttp
+beautifulsoup4
+chromadb
+pypdf
+langchain

@@ -7,7 +7,7 @@ from typing import Generator, Sequence, cast
 
 import chromadb  # pyright: ignore[reportMissingTypeStubs]
 import chromadb.api  # pyright: ignore[reportMissingTypeStubs]
-import PyPDF2
+import pypdf
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 from shiny.types import FileInfo
@@ -198,7 +198,7 @@ def chat_messages_to_md(messages: Sequence[openai_api.ChatMessage]) -> str:
 
 def extract_text_from_pdf(pdf_path: str | Path) -> str:
     with open(pdf_path, "rb") as file:
-        pdf_reader = PyPDF2.PdfReader(file)
+        pdf_reader = pypdf.PdfReader(file)
 
         lines: list[str] = []
         for i in range(len(pdf_reader.pages)):
