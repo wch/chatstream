@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Generator, Sequence, cast
 
-import chromadb
+import chromadb  # pyright: ignore[reportMissingTypeStubs]
+import chromadb.api  # pyright: ignore[reportMissingTypeStubs]
 import PyPDF2
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from shiny import App, Inputs, Outputs, Session, reactive, ui
+from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 from shiny.types import FileInfo
 
 import chat
@@ -36,9 +38,16 @@ app_ui = ui.page_fluid(
             ui.div(
                 ui.h4("Shiny Document Query"),
                 ui.hr(),
-                ui.input_file("file", "Upload a text or PDF file"),
+                ui.input_file("file", "Upload text or PDF files", multiple=True),
+                ui.hr(),
+                ui.output_ui("uploaded_filenames_ui"),
+                ui.hr(),
                 ui.input_slider(
-                    "n_documents", "Number of context documents", min=2, max=12, value=8
+                    "n_documents",
+                    "Number of context chunks to send",
+                    min=2,
+                    max=12,
+                    value=8,
                 ),
                 ui.hr(),
                 {"class": "sticky-sm-top", "style": "top: 15px;"},
@@ -79,6 +88,8 @@ def server(input: Inputs, output: Outputs, session: Session):
         )
     )
 
+    uploaded_filenames = reactive.Value[tuple[str, ...]](tuple())
+
     def add_context_to_query(query: str) -> str:
         results = collection.query(
             query_texts=[query],
@@ -113,24 +124,24 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     @reactive.Effect
     def upload_file():
-        file_infos = cast(list[FileInfo], input.file())
-        if not file_infos:
+        file_infos = cast(list[FileInfo] | None, input.file())
+        if file_infos is None:
             return
 
-        text = extract_text_from_pdf(file_infos[0]["datapath"])
+        for file in file_infos:
+            add_file_content_to_db(collection, file["datapath"], file["name"])
+            with reactive.isolate():
+                uploaded_filenames.set(uploaded_filenames() + (file["name"],))
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-        text_chunks = text_splitter.split_text(text)
+    @output
+    @render.ui
+    def uploaded_filenames_ui():
+        if len(uploaded_filenames()) == 0:
+            return ui.div()
 
-        print(json.dumps(text_chunks, indent=2))
-
-        collection.add(
-            documents=text_chunks,
-            metadatas=[
-                {"filename": file_infos[0]["name"], "page": str(i)}
-                for i in range(len(text_chunks))
-            ],
-            ids=[f"{file_infos[0]['name']}-{i}" for i in range(len(text_chunks))],
+        return ui.div(
+            ui.p(ui.tags.b("Indexed files:")),
+            *[ui.p(file) for file in uploaded_filenames()],
         )
 
     def download_conversation_filename() -> str:
@@ -185,7 +196,7 @@ def chat_messages_to_md(messages: Sequence[openai_api.ChatMessage]) -> str:
     return res
 
 
-def extract_text_from_pdf(pdf_path: str) -> str:
+def extract_text_from_pdf(pdf_path: str | Path) -> str:
     with open(pdf_path, "rb") as file:
         pdf_reader = PyPDF2.PdfReader(file)
 
@@ -194,3 +205,27 @@ def extract_text_from_pdf(pdf_path: str) -> str:
             lines.append(pdf_reader.pages[i].extract_text())
 
     return "\n".join(lines)
+
+
+def add_file_content_to_db(
+    collection: chromadb.api.Collection, file: str | Path, label: str
+) -> None:
+    file = Path(file)
+
+    if file.suffix.lower() == ".pdf":
+        text = extract_text_from_pdf(file)
+    else:
+        text = file.read_text()
+
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    text_chunks = text_splitter.split_text(text)
+
+    print(json.dumps(text_chunks, indent=2))
+
+    collection.add(
+        documents=text_chunks,
+        metadatas=[
+            {"filename": label, "page": str(i)} for i in range(len(text_chunks))
+        ],
+        ids=[f"{label}-{i}" for i in range(len(text_chunks))],
+    )
