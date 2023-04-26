@@ -1,9 +1,5 @@
 .shiny-gpt-chat textarea.form-control {
-  padding: 5px 8px;
   margin-bottom: 10px;
-  resize: none;
-  overflow-y: hidden;
-  height: auto;
 }
 .shiny-gpt-chat textarea.form-control:disabled {
   /* Don't gray-out textarea when disabled. */

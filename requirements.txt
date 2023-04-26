@@ -1,4 +1,4 @@
-shiny@https://github.com/rstudio/py-shiny/tarball/bslib-hack
+shiny>=0.3.3
 openai
 tiktoken
 aiohttp

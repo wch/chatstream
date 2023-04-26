@@ -21,13 +21,6 @@
     }
   });
 
-  onDelegatedEvent("input", ".shiny-gpt-chat textarea", (e) => {
-    const { target } = e;
-    // Automatically resize the textarea to fit its content.
-    target.style.height = "auto";
-    target.style.height = target.scrollHeight + "px";
-  });
-
   onDelegatedEvent("click", ".shiny-gpt-chat button", (e) => {
     e.target.disabled = true;
   });

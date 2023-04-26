@@ -21,6 +21,7 @@ from typing import (
 )
 
 import openai
+import shiny.experimental as x
 import tiktoken
 from htmltools import HTMLDependency
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
@@ -313,11 +314,12 @@ def chat_server(
             return ui.div()
 
         return ui.div(
-            ui.input_text_area(
+            x.ui.input_text_area(
                 "query",
                 None,
                 # value="2+2",
                 # placeholder="Ask me anything...",
+                autoresize=True,
                 rows=1,
                 width="100%",
             ),
@@ -342,7 +344,7 @@ def chat_server(
 
     async def delayed_set_query(query: str, delay: float) -> None:
         await asyncio.sleep(delay)
-        async with reactive._core.lock():
+        async with reactive.lock():
             ui.update_text_area("query", value=query, session=session)
             await reactive.flush()
 
@@ -351,7 +353,7 @@ def chat_server(
 
     async def delayed_new_query_trigger(delay: float) -> None:
         await asyncio.sleep(delay)
-        async with reactive._core.lock():
+        async with reactive.lock():
             ask_trigger.set(ask_trigger() + 1)
             await reactive.flush()
 
