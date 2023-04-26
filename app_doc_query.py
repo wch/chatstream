@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Generator, Sequence, cast
@@ -14,6 +15,11 @@ from shiny.types import FileInfo
 
 import chat
 import openai_api
+
+# Avoid the following warning:
+# huggingface/tokenizers: The current process just got forked, after parallelism has
+# already been used. Disabling parallelism to avoid deadlocks...
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # Code for initializing popper.js tooltips.
 tooltip_init_js = """
