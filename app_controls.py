@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from typing import Generator, Sequence
 
+import shiny.experimental as x
 from shiny import App, Inputs, Outputs, Session, ui
 
 import chat
@@ -19,82 +20,76 @@ var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
 });
 """
 
-app_ui = ui.page_fluid(
+app_ui = x.ui.page_fillable(
     ui.head_content(ui.tags.title("Shiny ChatGPT")),
-    ui.row(
-        ui.column(
-            9,
-            chat.chat_ui("chat1"),
-        ),
-        ui.column(
-            3,
-            {"class": "bg-light"},
+    x.ui.layout_sidebar(
+        x.ui.sidebar(
+            ui.h4("Shiny ChatGPT"),
+            ui.hr(),
+            ui.input_select("model", "Model", choices=["gpt-3.5-turbo"]),
+            ui.input_slider(
+                "temperature",
+                ui.span(
+                    "Temperature",
+                    {
+                        "data-bs-toggle": "tooltip",
+                        "data-bs-placement": "left",
+                        "title": "Lower values are more deterministic. Higher values are more random and unpredictable.",
+                    },
+                ),
+                min=0,
+                max=2,
+                value=0.7,
+                step=0.05,
+            ),
+            ui.input_slider(
+                "throttle",
+                ui.span(
+                    "Throttle interval (seconds)",
+                    {
+                        "data-bs-toggle": "tooltip",
+                        "data-bs-placement": "left",
+                        "title": "Controls the delay between handling incoming messages. Lower values feel more responsive but transfer more data.",
+                    },
+                ),
+                min=0,
+                max=1,
+                value=0.1,
+                step=0.05,
+            ),
+            ui.input_text_area(
+                "system_prompt",
+                "System prompt",
+                value="You are a helpful assistant.",
+            ),
+            ui.hr(),
+            ui.p(ui.h5("Export conversation")),
+            ui.input_radio_buttons(
+                "download_format", None, ["Markdown", "JSON"], inline=True
+            ),
             ui.div(
-                {"class": "sticky-sm-top", "style": "top: 15px;"},
-                ui.h4("Shiny ChatGPT"),
-                ui.hr(),
-                ui.input_select("model", "Model", choices=["gpt-3.5-turbo"]),
-                ui.input_slider(
-                    "temperature",
-                    ui.span(
-                        "Temperature",
-                        {
-                            "data-bs-toggle": "tooltip",
-                            "data-bs-placement": "left",
-                            "title": "Lower values are more deterministic. Higher values are more random and unpredictable.",
-                        },
-                    ),
-                    min=0,
-                    max=2,
-                    value=0.7,
-                    step=0.05,
-                ),
-                ui.input_slider(
-                    "throttle",
-                    ui.span(
-                        "Throttle interval (seconds)",
-                        {
-                            "data-bs-toggle": "tooltip",
-                            "data-bs-placement": "left",
-                            "title": "Controls the delay between handling incoming messages. Lower values feel more responsive but transfer more data.",
-                        },
-                    ),
-                    min=0,
-                    max=1,
-                    value=0.1,
-                    step=0.05,
-                ),
-                ui.input_text_area(
-                    "system_prompt",
-                    "System prompt",
-                    value="You are a helpful assistant.",
-                ),
-                ui.hr(),
-                ui.p(ui.h5("Export conversation")),
-                ui.input_radio_buttons(
-                    "download_format", None, ["Markdown", "JSON"], inline=True
-                ),
-                ui.div(
-                    ui.download_button("download_conversation", "Download"),
-                ),
-                ui.hr(),
-                ui.p(
-                    "Built with ",
-                    ui.a("Shiny for Python", href="https://shiny.rstudio.com/py/"),
-                ),
-                ui.p(
-                    ui.a(
-                        "Source code",
-                        href="https://github.com/wch/shiny-openai-chat",
-                        target="_blank",
-                    ),
+                ui.download_button("download_conversation", "Download"),
+            ),
+            ui.hr(),
+            ui.p(
+                "Built with ",
+                ui.a("Shiny for Python", href="https://shiny.rstudio.com/py/"),
+            ),
+            ui.p(
+                ui.a(
+                    "Source code",
+                    href="https://github.com/wch/shiny-openai-chat",
+                    target="_blank",
                 ),
             ),
+            position="right",
         ),
+        chat.chat_ui("chat1"),
+        # Initialize the tooltips at the bottom of the page (after the content is in the DOM)
+        ui.tags.script(tooltip_init_js),
     ),
-    # Initialize the tooltips at the bottom of the page (after the content is in the DOM)
-    ui.tags.script(tooltip_init_js),
 )
+
 
 # ======================================================================================
 

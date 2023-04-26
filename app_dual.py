@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shiny.experimental as x
 from shiny import App, Inputs, Outputs, Session, reactive, ui
 
 import chat
@@ -14,65 +15,64 @@ var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
 });
 """
 
-app_ui = ui.page_fluid(
+app_ui = x.ui.page_fillable(
     ui.head_content(ui.tags.title("Shiny ChatGPT")),
-    ui.row(
-        ui.div(
-            {"class": "col-sm-5"},
-            chat.chat_ui("chat1"),
-        ),
-        ui.div(
-            {"class": "col-sm-5"},
-            chat.chat_ui("chat2"),
-        ),
-        ui.div(
-            {"class": "col-sm-2 bg-light"},
-            ui.div(
-                {"class": "sticky-sm-top", "style": "top: 15px;"},
-                ui.h4("Shiny ChatGPT"),
-                ui.hr(),
-                ui.p("Model: gpt-3.5-turbo"),
-                ui.input_slider(
-                    "temperature",
-                    ui.span(
-                        "Temperature",
-                        {
-                            "data-bs-toggle": "tooltip",
-                            "data-bs-placement": "left",
-                            "title": "Lower values are more deterministic. Higher values are more random and unpredictable.",
-                        },
-                    ),
-                    min=0,
-                    max=2,
-                    value=0.7,
-                    step=0.05,
+    x.ui.layout_sidebar(
+        x.ui.sidebar(
+            ui.h4("Shiny ChatGPT"),
+            ui.hr(),
+            ui.p("Model: gpt-3.5-turbo"),
+            ui.input_slider(
+                "temperature",
+                ui.span(
+                    "Temperature",
+                    {
+                        "data-bs-toggle": "tooltip",
+                        "data-bs-placement": "left",
+                        "title": "Lower values are more deterministic. Higher values are more random and unpredictable.",
+                    },
                 ),
-                ui.input_switch("auto_converse", "Converse with self"),
-                ui.input_slider(
-                    "auto_converse_delay",
-                    "Conversation delay (seconds)",
-                    min=0,
-                    max=3,
-                    value=1,
-                    step=0.2,
-                ),
-                ui.hr(),
-                ui.p(
-                    "Built with ",
-                    ui.a("Shiny for Python", href="https://shiny.rstudio.com/py/"),
-                ),
-                ui.p(
-                    ui.a(
-                        "Source code",
-                        href="https://github.com/wch/shiny-openai-chat",
-                        target="_blank",
-                    ),
+                min=0,
+                max=2,
+                value=0.7,
+                step=0.05,
+            ),
+            ui.input_switch("auto_converse", "Converse with self"),
+            ui.input_slider(
+                "auto_converse_delay",
+                "Conversation delay (seconds)",
+                min=0,
+                max=3,
+                value=1,
+                step=0.2,
+            ),
+            ui.hr(),
+            ui.p(
+                "Built with ",
+                ui.a("Shiny for Python", href="https://shiny.rstudio.com/py/"),
+            ),
+            ui.p(
+                ui.a(
+                    "Source code",
+                    href="https://github.com/wch/shiny-openai-chat",
+                    target="_blank",
                 ),
             ),
+            position="right",
         ),
+        ui.row(
+            ui.div(
+                {"class": "col-sm-6"},
+                chat.chat_ui("chat1"),
+            ),
+            ui.div(
+                {"class": "col-sm-6"},
+                chat.chat_ui("chat2"),
+            ),
+        ),
+        # Initialize the tooltips at the bottom of the page (after the content is in the DOM)
+        ui.tags.script(tooltip_init_js),
     ),
-    # Initialize the tooltips at the bottom of the page (after the content is in the DOM)
-    ui.tags.script(tooltip_init_js),
 )
 
 # ======================================================================================

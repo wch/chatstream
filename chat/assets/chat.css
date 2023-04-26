@@ -1,6 +1,6 @@
 .shiny-gpt-chat textarea.form-control {
   padding: 5px 8px;
-  margin-top: 10px;
+  margin-bottom: 10px;
   resize: none;
   overflow-y: hidden;
   height: auto;
@@ -23,14 +23,14 @@
 .shiny-gpt-chat .user-message {
   border-radius: 4px;
   padding: 5px 8px;
-  margin-top: 10px;
+  margin-bottom: 10px;
   border: 1px solid #dddddd;
   background-color: #ffffff;
 }
 .shiny-gpt-chat .assistant-message {
   border-radius: 4px;
   padding: 5px 8px;
-  margin-top: 10px;
+  margin-bottom: 10px;
   border: 1px solid #dddddd;
   background-color: #f0f0f0;
 }

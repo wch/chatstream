@@ -9,6 +9,7 @@ from typing import Generator, Sequence, cast
 import chromadb  # pyright: ignore[reportMissingTypeStubs]
 import chromadb.api  # pyright: ignore[reportMissingTypeStubs]
 import pypdf
+import shiny.experimental as x
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 from shiny.types import FileInfo
@@ -31,53 +32,48 @@ var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
 });
 """
 
-app_ui = ui.page_fluid(
+app_ui = x.ui.page_fillable(
     ui.head_content(ui.tags.title("Shiny Document Query")),
-    ui.row(
-        ui.column(
-            9,
-            chat.chat_ui("chat1"),
-        ),
-        ui.column(
-            3,
-            {"class": "bg-light"},
+    x.ui.layout_sidebar(
+        x.ui.sidebar(
+            ui.h4("Shiny Document Query"),
+            ui.hr(),
+            ui.input_file("file", "Upload text or PDF files", multiple=True),
+            ui.hr(),
+            ui.output_ui("uploaded_filenames_ui"),
+            ui.hr(),
+            ui.input_slider(
+                "n_documents",
+                "Number of context chunks to send",
+                min=2,
+                max=12,
+                value=8,
+            ),
+            ui.hr(),
+            {"class": "sticky-sm-top", "style": "top: 15px;"},
+            ui.p(ui.h5("Export conversation")),
+            ui.input_radio_buttons(
+                "download_format", None, ["Markdown", "JSON"], inline=True
+            ),
             ui.div(
-                ui.h4("Shiny Document Query"),
-                ui.hr(),
-                ui.input_file("file", "Upload text or PDF files", multiple=True),
-                ui.hr(),
-                ui.output_ui("uploaded_filenames_ui"),
-                ui.hr(),
-                ui.input_slider(
-                    "n_documents",
-                    "Number of context chunks to send",
-                    min=2,
-                    max=12,
-                    value=8,
-                ),
-                ui.hr(),
-                {"class": "sticky-sm-top", "style": "top: 15px;"},
-                ui.p(ui.h5("Export conversation")),
-                ui.input_radio_buttons(
-                    "download_format", None, ["Markdown", "JSON"], inline=True
-                ),
-                ui.div(
-                    ui.download_button("download_conversation", "Download"),
-                ),
-                ui.hr(),
-                ui.p(
-                    "Built with ",
-                    ui.a("Shiny for Python", href="https://shiny.rstudio.com/py/"),
-                ),
-                ui.p(
-                    ui.a(
-                        "Source code",
-                        href="https://github.com/wch/shiny-openai-chat",
-                        target="_blank",
-                    ),
+                ui.download_button("download_conversation", "Download"),
+            ),
+            ui.hr(),
+            ui.p(
+                "Built with ",
+                ui.a("Shiny for Python", href="https://shiny.rstudio.com/py/"),
+            ),
+            ui.p(
+                ui.a(
+                    "Source code",
+                    href="https://github.com/wch/shiny-openai-chat",
+                    target="_blank",
                 ),
             ),
+            width=280,
+            position="right",
         ),
+        chat.chat_ui("chat1"),
     ),
     # Initialize the tooltips at the bottom of the page (after the content is in the DOM)
     ui.tags.script(tooltip_init_js),

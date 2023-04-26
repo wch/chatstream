@@ -111,6 +111,52 @@ def chat_ui() -> ui.Tag:
 
 
 @module.server
+class ChatServer:
+    def __init__(self, input: Inputs, output: Outputs, session: Session, x: int = 123):
+        print("init ChatServer")
+        self.x = x
+
+        # This is the current streaming chat string, in the form of a tuple of strings, one
+        # string from each message. When not streaming, it is empty.
+        streaming_chat_string_pieces: reactive.Value[tuple[str, ...]] = reactive.Value(
+            tuple()
+        )
+
+        @output
+        @render.ui
+        @reactive.event(streaming_chat_string_pieces)
+        def query_ui():
+            # While streaming an answer, don't show the query input.
+            if len(streaming_chat_string_pieces()) > 0:
+                return ui.div()
+
+            return ui.div(
+                ui.input_text_area(
+                    "query",
+                    None,
+                    # value="2+2",
+                    # placeholder="Ask me anything...",
+                    rows=1,
+                    width="100%",
+                ),
+                ui.div(
+                    {"style": "width: 100%; text-align: right;"},
+                    ui.input_action_button("ask", "Ask"),
+                ),
+                ui.tags.script(
+                    # The explicit focus() call is needed so that the user can type the next
+                    # question without clicking on the query box again. However, it's a bit
+                    # too aggressive, because it will steal focus if, while the answer is
+                    # streaming, the user clicks somewhere else. It would be better to have
+                    # the query box set to `display: none` while the answer streams and then
+                    # unset afterward, so that it can keep focus, but won't steal focus.
+                    "document.getElementById('%s').focus();"
+                    % module.resolve_id("query")
+                ),
+            )
+
+
+@module.server
 def chat_server(
     input: Inputs,
     output: Outputs,
