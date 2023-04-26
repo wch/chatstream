@@ -1,4 +1,5 @@
 .shiny-gpt-chat textarea.form-control {
+  margin-top: 5px;
   margin-bottom: 10px;
 }
 .shiny-gpt-chat textarea.form-control:disabled {
