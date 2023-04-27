@@ -36,7 +36,7 @@ import tiktoken
 from htmltools import HTMLDependency
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
 
-from . import openai_api
+from .openai_api import ChatCompletionStreaming, ChatMessage, OpenAiModels
 
 if sys.version_info < (3, 10):
     from typing_extensions import ParamSpec, TypeGuard
@@ -57,15 +57,6 @@ def safe_create_task(task: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
     t.add_done_callback(running_tasks.remove)
     return t
 
-
-OpenAiModels = Literal[
-    "gpt-3.5-turbo",
-    "gpt-3.5-turbo-0301",
-    "gpt-4",
-    "gpt-4-0314",
-    "gpt-4-32k",
-    "gpt-4-32k-0314",
-]
 
 DEFAULT_MODEL: OpenAiModels = "gpt-3.5-turbo"
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
@@ -116,8 +107,38 @@ class chat_server:
         throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
         query_preprocessor: Callable[[str], str]
         | Callable[[str], Awaitable[str]] = lambda x: x,
-        print_request: bool = False,
+        debug: bool = False,
     ):
+        """
+        Chat server shiny module.
+
+        Note that most server modules are implemented as functions, but this one is
+        implemented as a class.
+
+        Parameters
+        ----------
+        input
+            Shiny Session input object.
+        output
+            Shiny Session output object.
+        session
+            Shiny Session object.
+        model
+            OpenAI model to use. Can be a string or a function that returns a string.
+        system_prompt
+            System prompt to use. Can be a string or a function that returns a string.
+        temperature
+            Temperature to use. Can be a float or a function that returns a float.
+        throttle
+            Throttle to use. Can be a float or a function that returns a float.
+        query_preprocessor
+            Function that takes a string and returns a string. This is run on the user's
+            query before it is sent to the OpenAI API. Note that is run only on the most
+            recent query; previous messages in the chat history are not run through this
+            function.
+        debug
+            Whether to print debugging infromation to the console.
+        """
         self.input = input
         self.output = output
         self.session = session
@@ -135,16 +156,16 @@ class chat_server:
         # If query_preprocessor is not async, wrap it in an async function.
         self.query_preprocessor = wrap_async(query_preprocessor)
 
-        self.print_request = print_request
+        self.print_request = debug
 
         # This contains a tuple of the most recent messages when a streaming response is
         # coming in. When not streaming, this is set to an empty tuple.
         self.streaming_chat_messages_batch: reactive.Value[
-            tuple[openai_api.ChatCompletionStreaming, ...]
+            tuple[ChatCompletionStreaming, ...]
         ] = reactive.Value(tuple())
 
-        # This is the current streaming chat string, in the form of a tuple of strings, one
-        # string from each message. When not streaming, it is empty.
+        # This is the current streaming chat string, in the form of a tuple of strings,
+        # one string from each message. When not streaming, it is empty.
         self.streaming_chat_string_pieces: reactive.Value[
             tuple[str, ...]
         ] = reactive.Value(tuple())
@@ -155,8 +176,8 @@ class chat_server:
 
         self.ask_trigger = reactive.Value(0)
 
-        # This is the current streaming chat string, in the form of a tuple of strings, one
-        # string from each message. When not streaming, it is empty.
+        # This is the current streaming chat string, in the form of a tuple of strings,
+        # one string from each message. When not streaming, it is empty.
         self.streaming_chat_string_pieces: reactive.Value[
             tuple[str, ...]
         ] = reactive.Value(tuple())
@@ -180,8 +201,8 @@ class chat_server:
                     # If we got here, we know that streaming_chat_string is not None.
                     current_message_str = "".join(self.streaming_chat_string_pieces())
 
-                    # Update session_messages. We need to make a copy to trigger a reactive
-                    # invalidation.
+                    # Update session_messages. We need to make a copy to trigger a
+                    # reactive invalidation.
                     current_message: ChatMessageEnriched = {
                         "content": current_message_str,
                         "role": "assistant",
@@ -214,8 +235,8 @@ class chat_server:
             }
             self.session_messages.set(prev_session_messages + (current_message,))
 
-            # For the query we're about to send, we need to run the current message through
-            # the preprocessor.
+            # For the query we're about to send, we need to run the current message
+            # through the preprocessor.
             current_message_preprocessed: ChatMessageEnriched = current_message.copy()
             current_message_preprocessed["content"] = await self.query_preprocessor(
                 current_message_preprocessed["content"]
@@ -224,8 +245,8 @@ class chat_server:
                 current_message_preprocessed["content"], self.model()
             )
 
-            # Turn it the set of messages into a list, then we'll go backward through the
-            # list and keep messages until we hit the token limit.
+            # Turn it the set of messages into a list, then we'll go backward through
+            # the list and keep messages until we hit the token limit.
             session_messages2 = list(prev_session_messages)
             session_messages2.append(current_message_preprocessed)
 
@@ -250,13 +271,11 @@ class chat_server:
                 print(json.dumps(outgoing_messages_normalized, indent=2))
                 print(f"TOKENS USED: {tokens_total}")
 
-            # Launch a Task that updates the chat string asynchronously. We run this in a
-            # separate task so that the data can come in without need to await it in this
-            # Task (which would block other computation to happen, like running reactive
-            # stuff).
-            messages: StreamResult[
-                openai_api.ChatCompletionStreaming
-            ] = stream_to_reactive(
+            # Launch a Task that updates the chat string asynchronously. We run this in
+            # a separate task so that the data can come in without need to await it in
+            # this Task (which would block other computation to happen, like running
+            # reactive stuff).
+            messages: StreamResult[ChatCompletionStreaming] = stream_to_reactive(
                 openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
                     model=self.model(),
                     messages=outgoing_messages_normalized,
@@ -297,9 +316,9 @@ class chat_server:
         def current_streaming_message_ui():
             pieces = self.streaming_chat_string_pieces()
 
-            # Only display this content while streaming. Once the streaming is done, this
-            # content will disappear and an identical-looking one will be added to the
-            # `session_messages_ui` output.
+            # Only display this content while streaming. Once the streaming is done,
+            # this content will disappear and an identical-looking one will be added to
+            # the `session_messages_ui` output.
             if len(pieces) == 0:
                 return ui.div()
 
@@ -334,12 +353,13 @@ class chat_server:
                     ui.input_action_button("ask", "Ask"),
                 ),
                 ui.tags.script(
-                    # The explicit focus() call is needed so that the user can type the next
-                    # question without clicking on the query box again. However, it's a bit
-                    # too aggressive, because it will steal focus if, while the answer is
-                    # streaming, the user clicks somewhere else. It would be better to have
-                    # the query box set to `display: none` while the answer streams and then
-                    # unset afterward, so that it can keep focus, but won't steal focus.
+                    # The explicit focus() call is needed so that the user can type the
+                    # next question without clicking on the query box again. However,
+                    # it's a bit too aggressive, because it will steal focus if, while
+                    # the answer is streaming, the user clicks somewhere else. It would
+                    # be better to have the query box set to `display: none` while the
+                    # answer streams and then unset afterward, so that it can keep
+                    # focus, but won't steal focus.
                     "document.getElementById('%s').focus();"
                     % module.resolve_id("query")
                 ),
@@ -446,13 +466,13 @@ def stream_to_reactive(
 
 def chat_message_enriched_to_chat_message(
     msg: ChatMessageEnriched,
-) -> openai_api.ChatMessage:
+) -> ChatMessage:
     return {"role": msg["role"], "content": msg["content"]}
 
 
 def chat_messages_enriched_to_chat_messages(
     messages: Sequence[ChatMessageEnriched],
-) -> list[openai_api.ChatMessage]:
+) -> list[ChatMessage]:
     return list(chat_message_enriched_to_chat_message(msg) for msg in messages)
 
 

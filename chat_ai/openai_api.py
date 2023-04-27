@@ -31,6 +31,16 @@ if api_key is None:
 openai.api_key = api_key
 
 
+OpenAiModels = Literal[
+    "gpt-3.5-turbo",
+    "gpt-3.5-turbo-0301",
+    "gpt-4",
+    "gpt-4-0314",
+    "gpt-4-32k",
+    "gpt-4-32k-0314",
+]
+
+
 class Usage(TypedDict):
     completion_tokens: int  # Note: this doesn't seem to be present in all cases.
     prompt_tokens: int
