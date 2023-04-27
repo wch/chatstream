@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from datetime import datetime
@@ -136,13 +137,13 @@ def server(input: Inputs, output: Outputs, session: Session):
     )
 
     @reactive.Effect
-    def upload_file():
+    async def upload_file():
         file_infos = cast(list[FileInfo] | None, input.file())
         if file_infos is None:
             return
 
         for file in file_infos:
-            add_file_content_to_db(
+            await add_file_content_to_db(
                 collection, file["datapath"], file["name"], debug=DEBUG
             )
             with reactive.isolate():
@@ -235,7 +236,7 @@ def extract_text_from_pdf(pdf_path: str | Path) -> str:
     return "\n".join(lines)
 
 
-def add_file_content_to_db(
+async def add_file_content_to_db(
     collection: chromadb.api.Collection,
     file: str | Path,
     label: str,
@@ -243,24 +244,29 @@ def add_file_content_to_db(
 ) -> None:
     file = Path(file)
 
-    if file.suffix.lower() == ".pdf":
-        text = extract_text_from_pdf(file)
-    else:
-        text = file.read_text()
+    with ui.Progress(min=1, max=15) as p:
+        p.set(message="Extracting text...")
+        await asyncio.sleep(0)
+        if file.suffix.lower() == ".pdf":
+            text = extract_text_from_pdf(file)
+        else:
+            text = file.read_text()
 
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-    text_chunks = text_splitter.split_text(text)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+        text_chunks = text_splitter.split_text(text)
 
     if debug:
         print(json.dumps(text_chunks, indent=2))
 
-    collection.add(
-        documents=text_chunks,
-        metadatas=[
-            {"filename": label, "page": str(i)} for i in range(len(text_chunks))
-        ],
-        ids=[f"{label}-{i}" for i in range(len(text_chunks))],
-    )
+    with ui.Progress(min=1, max=len(text_chunks)) as p:
+        for i in range(len(text_chunks)):
+            p.set(value=i, message="Adding text to database...")
+            await asyncio.sleep(0)
+            collection.add(
+                documents=text_chunks[i],
+                metadatas={"filename": label, "page": str(i)},
+                ids=f"{label}-{i}",
+            )
 
 
 def get_token_count(s: str, model: str) -> int:
