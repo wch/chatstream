@@ -47,7 +47,7 @@ app_ui = x.ui.page_fillable(
         x.ui.sidebar(
             ui.h4("Shiny Document Query"),
             ui.hr(),
-            ui.input_file("file", "Upload text or PDF files", multiple=True),
+            ui.input_file("file", "Drag to upload text or PDF files", multiple=True),
             ui.hr(),
             ui.output_ui("uploaded_filenames_ui"),
             ui.hr(),
@@ -74,7 +74,7 @@ app_ui = x.ui.page_fillable(
             width=280,
             position="right",
         ),
-        chat_ai.chat_ui("chat1"),
+        ui.output_ui("query_ui"),
     ),
     # Initialize the tooltips at the bottom of the page (after the content is in the DOM)
     ui.tags.script(tooltip_init_js),
@@ -147,6 +147,17 @@ def server(input: Inputs, output: Outputs, session: Session):
             )
             with reactive.isolate():
                 uploaded_filenames.set(uploaded_filenames() + (file["name"],))
+
+    @output
+    @render.ui
+    def query_ui():
+        if len(uploaded_filenames()) == 0:
+            return ui.div(
+                {"class": "mx-auto text-center"},
+                ui.h4("Upload a file to get started..."),
+            )
+        else:
+            return chat_ai.chat_ui("chat1")
 
     @output
     @render.ui
