@@ -16,7 +16,7 @@ from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 from shiny.types import FileInfo
 
 import chat_ai
-from chat_ai import openai_api
+from chat_ai import openai_types
 
 MODEL = "gpt-3.5-turbo"
 # Maximum number of context chunks to send to the API.
@@ -185,7 +185,7 @@ app = App(app_ui, server)
 # ======================================================================================
 
 
-def chat_messages_to_md(messages: Sequence[openai_api.ChatMessage]) -> str:
+def chat_messages_to_md(messages: Sequence[openai_types.ChatMessage]) -> str:
     """
     Convert a list of ChatMessage objects to a Markdown string.
 

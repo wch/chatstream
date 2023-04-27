@@ -36,7 +36,7 @@ import tiktoken
 from htmltools import HTMLDependency
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
 
-from .openai_api import ChatCompletionStreaming, ChatMessage, OpenAiModels
+from .openai_types import ChatCompletionStreaming, ChatMessage, OpenAiModels
 
 if sys.version_info < (3, 10):
     from typing_extensions import ParamSpec, TypeGuard

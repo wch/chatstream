@@ -8,7 +8,7 @@ import shiny.experimental as x
 from shiny import App, Inputs, Outputs, Session, ui
 
 import chat_ai
-from chat_ai import openai_api
+from chat_ai import openai_types
 
 # Code for initializing popper.js tooltips.
 tooltip_init_js = """
@@ -129,7 +129,7 @@ app = App(app_ui, server)
 # ======================================================================================
 
 
-def chat_messages_to_md(messages: Sequence[openai_api.ChatMessage]) -> str:
+def chat_messages_to_md(messages: Sequence[openai_types.ChatMessage]) -> str:
     """
     Convert a list of ChatMessage objects to a Markdown string.
 
