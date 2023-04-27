@@ -121,7 +121,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     chat_session = chat_ai.chat_server(
         "chat1",
         query_preprocessor=add_context_to_query,
-        print_request=True,
+        debug=True,
     )
 
     @reactive.Effect
