@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+__version__ = "0.0.0"
+
+__all__ = (
+    "chat_ui",
+    "chat_server",
+    "ChatMessageEnriched",
+    "OpenAiModels",
+)
+
+
 import asyncio
 import functools
 import inspect
