@@ -17,6 +17,9 @@ from shiny.types import FileInfo
 import chat_ai
 from chat_ai import openai_api
 
+# Print debugging info to the console
+debug = True
+
 # Avoid the following warning:
 # huggingface/tokenizers: The current process just got forked, after parallelism has
 # already been used. Disabling parallelism to avoid deadlocks...
@@ -113,8 +116,9 @@ def server(input: Inputs, output: Outputs, session: Session):
         Answer:
         """
 
-        print(json.dumps(results, indent=2))
-        print(prompt_template)
+        if debug:
+            print(json.dumps(results, indent=2))
+            print(prompt_template)
 
         return prompt_template
 
@@ -131,7 +135,9 @@ def server(input: Inputs, output: Outputs, session: Session):
             return
 
         for file in file_infos:
-            add_file_content_to_db(collection, file["datapath"], file["name"])
+            add_file_content_to_db(
+                collection, file["datapath"], file["name"], debug=debug
+            )
             with reactive.isolate():
                 uploaded_filenames.set(uploaded_filenames() + (file["name"],))
 
@@ -212,7 +218,10 @@ def extract_text_from_pdf(pdf_path: str | Path) -> str:
 
 
 def add_file_content_to_db(
-    collection: chromadb.api.Collection, file: str | Path, label: str
+    collection: chromadb.api.Collection,
+    file: str | Path,
+    label: str,
+    debug: bool = False,
 ) -> None:
     file = Path(file)
 
@@ -224,7 +233,8 @@ def add_file_content_to_db(
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
     text_chunks = text_splitter.split_text(text)
 
-    print(json.dumps(text_chunks, indent=2))
+    if debug:
+        print(json.dumps(text_chunks, indent=2))
 
     collection.add(
         documents=text_chunks,
