@@ -1,49 +1,53 @@
-OpenAI API app made with Shiny for Python
-=========================================
+Chat AI package for Shiny for Python
+====================================
 
-To run this app, you must either (A) create a file named `keys.py`, with your OpenAI API key, or (B) set an environment variable named `OPENAI_API_KEY` with your OpenAI API key.
+The chat_ai package provides a [Shiny for Python](https://shiny.rstudio.com/py/) module for building AI chat applications. Please keep in mind that this is very much a work in progress, and the API is likely to change.
 
-If you choose (A), create a file named `keys.py` with the following contents:
+It currently supports the OpenAI API.
 
-```py
-openai_api_key = "<your_openai_api_key>"
+
+## Installation
+
+The `chat_ai` package is not on PyPI, but can be installed with pip:
+
+```
+pip install chat_ai@git+https://github.com/wch/chat_ai.git
 ```
 
-If you choose (B), set the environment variable with the following command:
+Alternatively, if you'd like to develop a local copy of the package, first clone the repository and then install it with pip:
+
+```
+cd chat_ai
+pip install -e .[dev]
+```
+
+
+## Running examples
+
+Before running any examples, you must set an environment variable named `OPENAI_API_KEY` with your OpenAI API key.
+
+You can set the environment variable with the following command:
 
 ```bash
 export OPENAI_API_KEY="<your_openai_api_key>"
 ```
 
-You also need shiny and openai packages:
-
-```
-pip install shiny openai
-```
-
 Then run:
 
 ```
-shiny run app.py
+shiny run examples/basic/app.py --launch-browser
+```
+
+Some examples (like `recipes`) have a `requirements.txt` file. For those examples, first install the requirements, then run the application as normal:
+
+```
+pip install -r examples/recipes/requirements.txt
+shiny run examples/recipes/app.py --launch-browser
 ```
 
 
-## Deployment
+## FAQ
 
-First, make sure that the rsconnect-python package is installed:
+* **Does this work with [Shinylive](https://shiny.rstudio.com/py/docs/shinylive.html)?** It does not. The `openai` package has dependencies which do not install on [Pyodide](https://pyodide.org/). However, it may be possible in Pyodide to use the browser `fetch` API to make requests to the OpenAI API directly.
 
-```
-pip install rsconnect-python
-```
-
-Then make sure a server is registered. For example you can register a server named `colorado` with the following command. Note that you can get the API key from your server's web interface.
-
-```
-rsconnect add -n colorado -s https://colorado.posit.co/rsc/ -k rsconnect_api_key
-```
-
-Finally, deploy the app with the following command:
-
-```
-rsconnect deploy shiny -n colorado .
-```
+* **Does this work with [langchain](https://github.com/hwchase17/langchain)?** It currently does not. Note that most of the langchain interfaces do not support streaming responses, so instead of showing responses as each word comes in, there is a wait and then the entire response arrives at once.
