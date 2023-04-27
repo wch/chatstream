@@ -36,7 +36,7 @@ import tiktoken
 from htmltools import HTMLDependency
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
 
-import openai_api
+from . import openai_api
 
 if sys.version_info < (3, 10):
     from typing_extensions import ParamSpec, TypeGuard
@@ -519,7 +519,7 @@ def _chat_dependency():
     return HTMLDependency(
         "shiny-gpt-chat",
         "0.0.0",
-        source={"package": "chat", "subdir": "assets"},
+        source={"package": "chat_ai", "subdir": "assets"},
         script={"src": "chat.js"},
         stylesheet={"href": "chat.css"},
     )

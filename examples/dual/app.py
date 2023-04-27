@@ -3,7 +3,7 @@ from __future__ import annotations
 import shiny.experimental as x
 from shiny import App, Inputs, Outputs, Session, reactive, ui
 
-import chat
+import chat_ai
 
 # Code for initializing popper.js tooltips.
 tooltip_init_js = """
@@ -63,11 +63,11 @@ app_ui = x.ui.page_fillable(
         ui.row(
             ui.div(
                 {"class": "col-sm-6"},
-                chat.chat_ui("chat1"),
+                chat_ai.chat_ui("chat1"),
             ),
             ui.div(
                 {"class": "col-sm-6"},
-                chat.chat_ui("chat2"),
+                chat_ai.chat_ui("chat2"),
             ),
         ),
         # Initialize the tooltips at the bottom of the page (after the content is in the DOM)
@@ -79,8 +79,8 @@ app_ui = x.ui.page_fillable(
 
 
 def server(input: Inputs, output: Outputs, session: Session):
-    chat_session1 = chat.chat_server("chat1", temperature=input.temperature)
-    chat_session2 = chat.chat_server("chat2", temperature=input.temperature)
+    chat_session1 = chat_ai.chat_server("chat1", temperature=input.temperature)
+    chat_session2 = chat_ai.chat_server("chat2", temperature=input.temperature)
 
     # Which chat module has the most recent completed response from the server.
     most_recent = reactive.Value(0)

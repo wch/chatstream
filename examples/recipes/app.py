@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from shiny import App, Inputs, Outputs, Session, ui
 
-import chat
+import chat_ai
 import webscraper
 
 app_ui = ui.page_fixed(
     ui.p(ui.tags.b("Enter the URL for a recipe web page:")),
-    chat.chat_ui("chat1"),
+    chat_ai.chat_ui("chat1"),
 )
 
 
 def server(input: Inputs, output: Outputs, session: Session):
-    chat.chat_server(
+    chat_ai.chat_server(
         "chat1",
         system_prompt=recipe_prompt,
         temperature=0,

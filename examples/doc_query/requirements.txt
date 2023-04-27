@@ -1,0 +1,3 @@
+chromadb
+pypdf
+langchain

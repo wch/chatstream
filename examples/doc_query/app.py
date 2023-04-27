@@ -14,8 +14,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 from shiny.types import FileInfo
 
-import chat
-import openai_api
+import chat_ai
+from chat_ai import openai_api
 
 # Avoid the following warning:
 # huggingface/tokenizers: The current process just got forked, after parallelism has
@@ -73,7 +73,7 @@ app_ui = x.ui.page_fillable(
             width=280,
             position="right",
         ),
-        chat.chat_ui("chat1"),
+        chat_ai.chat_ui("chat1"),
     ),
     # Initialize the tooltips at the bottom of the page (after the content is in the DOM)
     ui.tags.script(tooltip_init_js),
@@ -118,7 +118,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
         return prompt_template
 
-    chat_session = chat.chat_server(
+    chat_session = chat_ai.chat_server(
         "chat1",
         query_preprocessor=add_context_to_query,
         print_request=True,
@@ -156,7 +156,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     @session.download(filename=download_conversation_filename)
     def download_conversation() -> Generator[str, None, None]:
         if input.download_format() == "JSON":
-            res = chat.chat_messages_enriched_to_chat_messages(
+            res = chat_ai.chat_messages_enriched_to_chat_messages(
                 chat_session.session_messages()
             )
             yield json.dumps(res, indent=2)

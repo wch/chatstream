@@ -1,8 +1,0 @@
-shiny>=0.3.3
-openai
-tiktoken
-aiohttp
-beautifulsoup4
-chromadb
-pypdf
-langchain
