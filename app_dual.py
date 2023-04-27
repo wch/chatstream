@@ -86,13 +86,13 @@ def server(input: Inputs, output: Outputs, session: Session):
     most_recent = reactive.Value(0)
 
     @reactive.Effect
-    @reactive.event(chat_session1.messages)
+    @reactive.event(chat_session1.session_messages)
     def _():
         with reactive.isolate():
             if not input.auto_converse() or most_recent() == 1:
                 return
 
-        last_message = chat_session1.messages()[-1]
+        last_message = chat_session1.session_messages()[-1]
         if last_message["role"] == "assistant":
             chat_session2.ask(
                 last_message["content"],
@@ -101,13 +101,13 @@ def server(input: Inputs, output: Outputs, session: Session):
             most_recent.set(1)
 
     @reactive.Effect
-    @reactive.event(chat_session2.messages)
+    @reactive.event(chat_session2.session_messages)
     def _():
         with reactive.isolate():
             if not input.auto_converse() or most_recent() == 2:
                 return
 
-        last_message = chat_session2.messages()[-1]
+        last_message = chat_session2.session_messages()[-1]
         if last_message["role"] == "assistant":
             chat_session1.ask(
                 last_message["content"],

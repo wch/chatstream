@@ -156,11 +156,13 @@ def server(input: Inputs, output: Outputs, session: Session):
     @session.download(filename=download_conversation_filename)
     def download_conversation() -> Generator[str, None, None]:
         if input.download_format() == "JSON":
-            res = chat.chat_messages_enriched_to_chat_messages(chat_session.messages())
+            res = chat.chat_messages_enriched_to_chat_messages(
+                chat_session.session_messages()
+            )
             yield json.dumps(res, indent=2)
 
         else:
-            yield chat_messages_to_md(chat_session.messages())
+            yield chat_messages_to_md(chat_session.session_messages())
 
 
 app = App(app_ui, server)

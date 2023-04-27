@@ -81,25 +81,6 @@ class ChatMessageEnriched(TypedDict):
     token_count: int
 
 
-class ChatSession:
-    _messages: reactive.Value[tuple[ChatMessageEnriched, ...]]
-    _ask_question: Callable[[str, float], None]
-
-    def __init__(
-        self,
-        messages: reactive.Value[tuple[ChatMessageEnriched, ...]],
-        ask_callback: Callable[[str, float], None],
-    ):
-        self._messages = messages
-        self._ask_question = ask_callback
-
-    def messages(self) -> tuple[ChatMessageEnriched, ...]:
-        return self._messages()
-
-    def ask(self, query: str, delay: float = 1) -> None:
-        self._ask_question(query, delay)
-
-
 @module.ui
 def chat_ui() -> ui.Tag:
     return ui.div(
@@ -112,252 +93,273 @@ def chat_ui() -> ui.Tag:
 
 
 @module.server
-def chat_server(
-    input: Inputs,
-    output: Outputs,
-    session: Session,
-    *,
-    model: OpenAiModels | Callable[[], OpenAiModels] = DEFAULT_MODEL,
-    system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
-    temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
-    throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
-    query_preprocessor: Callable[[str], str]
-    | Callable[[str], Awaitable[str]] = lambda x: x,
-    print_request: bool = False,
-) -> ChatSession:
-    # Ensure these are functions, even if we were passed static values.
-    model = cast(
-        # pyright needs a little help with this.
-        Callable[[], OpenAiModels],
-        wrap_function_nonreactive(model),
-    )
-    system_prompt = wrap_function_nonreactive(system_prompt)
-    temperature = wrap_function_nonreactive(temperature)
-    throttle = wrap_function_nonreactive(throttle)
+class chat_server:
+    def __init__(
+        self,
+        input: Inputs,
+        output: Outputs,
+        session: Session,
+        *,
+        model: OpenAiModels | Callable[[], OpenAiModels] = DEFAULT_MODEL,
+        system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
+        temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
+        throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
+        query_preprocessor: Callable[[str], str]
+        | Callable[[str], Awaitable[str]] = lambda x: x,
+        print_request: bool = False,
+    ):
+        self.input = input
+        self.output = output
+        self.session = session
 
-    # If query_preprocessor is not async, wrap it in an async function.
-    query_preprocessor = wrap_async(query_preprocessor)
-
-    # This contains a tuple of the most recent messages when a streaming response is
-    # coming in. When not streaming, this is set to an empty tuple.
-    streaming_chat_messages_batch: reactive.Value[
-        tuple[openai_api.ChatCompletionStreaming, ...]
-    ] = reactive.Value(tuple())
-
-    # This is the current streaming chat string, in the form of a tuple of strings, one
-    # string from each message. When not streaming, it is empty.
-    streaming_chat_string_pieces: reactive.Value[tuple[str, ...]] = reactive.Value(
-        tuple()
-    )
-
-    session_messages: reactive.Value[tuple[ChatMessageEnriched, ...]] = reactive.Value(
-        tuple()
-    )
-
-    ask_trigger = reactive.Value(0)
-
-    def system_prompt_message() -> ChatMessageEnriched:
-        return {
-            "role": "system",
-            "content": system_prompt(),
-            "content_html": "",
-            "token_count": get_token_count(system_prompt(), model()),
-        }
-
-    @reactive.Effect
-    @reactive.event(streaming_chat_messages_batch)
-    def finalize_streaming_result():
-        current_batch = streaming_chat_messages_batch()
-
-        for message in current_batch:
-            if "content" in message["choices"][0]["delta"]:
-                streaming_chat_string_pieces.set(
-                    streaming_chat_string_pieces()
-                    + (message["choices"][0]["delta"]["content"],)
-                )
-
-            if message["choices"][0]["finish_reason"] == "stop":
-                # If we got here, we know that streaming_chat_string is not None.
-                current_message_str = "".join(streaming_chat_string_pieces())
-
-                # Update session_messages. We need to make a copy to trigger a reactive
-                # invalidation.
-                current_message: ChatMessageEnriched = {
-                    "content": current_message_str,
-                    "role": "assistant",
-                    "content_html": ui.markdown(current_message_str),
-                    "token_count": get_token_count(current_message_str, model()),
-                }
-                session_messages.set(session_messages() + (current_message,))
-                streaming_chat_string_pieces.set(tuple())
-                return
-
-    @reactive.Effect
-    @reactive.event(input.ask, ask_trigger)
-    async def perform_query():
-        if input.query() == "":
-            return
-
-        # All previous messages, before we add the new query.
-        prev_session_messages = session_messages()
-
-        # First, add the current query to the session history.
-        current_message: ChatMessageEnriched = {
-            "content": input.query(),
-            "role": "user",
-            "content_html": ui.markdown(input.query()),
-            "token_count": get_token_count(input.query(), model()),
-        }
-        session_messages.set(prev_session_messages + (current_message,))
-
-        # For the query we're about to send, we need to run the current message through
-        # the preprocessor.
-        current_message_preprocessed: ChatMessageEnriched = current_message.copy()
-        current_message_preprocessed["content"] = await query_preprocessor(
-            current_message_preprocessed["content"]
+        # Ensure these are functions, even if we were passed static values.
+        self.model = cast(
+            # pyright needs a little help with this.
+            Callable[[], OpenAiModels],
+            wrap_function_nonreactive(model),
         )
-        current_message_preprocessed["token_count"] = get_token_count(
-            current_message_preprocessed["content"], model()
-        )
+        self.system_prompt = wrap_function_nonreactive(system_prompt)
+        self.temperature = wrap_function_nonreactive(temperature)
+        self.throttle = wrap_function_nonreactive(throttle)
 
-        # Turn it the set of messages into a list, then we'll go backward through the
-        # list and keep messages until we hit the token limit.
-        session_messages2 = list(prev_session_messages)
-        session_messages2.append(current_message_preprocessed)
+        # If query_preprocessor is not async, wrap it in an async function.
+        self.query_preprocessor = wrap_async(query_preprocessor)
 
-        # Count tokens, going backward.
-        outgoing_messages: list[ChatMessageEnriched] = []
-        tokens_total = system_prompt_message()["token_count"]
-        for message in reversed(session_messages2):
-            if tokens_total + message["token_count"] > MAX_TOKENS:
-                break
-            else:
-                tokens_total += message["token_count"]
-                outgoing_messages.append(message)
+        self.print_request = print_request
 
-        outgoing_messages.append(system_prompt_message())
-        outgoing_messages.reverse()
+        # This contains a tuple of the most recent messages when a streaming response is
+        # coming in. When not streaming, this is set to an empty tuple.
+        self.streaming_chat_messages_batch: reactive.Value[
+            tuple[openai_api.ChatCompletionStreaming, ...]
+        ] = reactive.Value(tuple())
 
-        outgoing_messages_normalized = chat_messages_enriched_to_chat_messages(
-            outgoing_messages
-        )
+        # This is the current streaming chat string, in the form of a tuple of strings, one
+        # string from each message. When not streaming, it is empty.
+        self.streaming_chat_string_pieces: reactive.Value[
+            tuple[str, ...]
+        ] = reactive.Value(tuple())
 
-        if print_request:
-            print(json.dumps(outgoing_messages_normalized, indent=2))
-            print(f"TOKENS USED: {tokens_total}")
+        self.session_messages: reactive.Value[
+            tuple[ChatMessageEnriched, ...]
+        ] = reactive.Value(tuple())
 
-        # Launch a Task that updates the chat string asynchronously. We run this in a
-        # separate task so that the data can come in without need to await it in this
-        # Task (which would block other computation to happen, like running reactive
-        # stuff).
-        messages: StreamResult[openai_api.ChatCompletionStreaming] = stream_to_reactive(
-            openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
-                model=model(),
-                messages=outgoing_messages_normalized,
-                stream=True,
-                temperature=temperature(),
-            ),
-            throttle=throttle(),
-        )
+        self.ask_trigger = reactive.Value(0)
 
-        # Set this to a non-empty tuple (with a blank string), to indicate that
-        # streaming is happening.
-        streaming_chat_string_pieces.set(("",))
+        # This is the current streaming chat string, in the form of a tuple of strings, one
+        # string from each message. When not streaming, it is empty.
+        self.streaming_chat_string_pieces: reactive.Value[
+            tuple[str, ...]
+        ] = reactive.Value(tuple())
+
+        self._init_reactives()
+
+    def _init_reactives(self) -> None:
+        @reactive.Effect
+        @reactive.event(self.streaming_chat_messages_batch)
+        def finalize_streaming_result():
+            current_batch = self.streaming_chat_messages_batch()
+
+            for message in current_batch:
+                if "content" in message["choices"][0]["delta"]:
+                    self.streaming_chat_string_pieces.set(
+                        self.streaming_chat_string_pieces()
+                        + (message["choices"][0]["delta"]["content"],)
+                    )
+
+                if message["choices"][0]["finish_reason"] == "stop":
+                    # If we got here, we know that streaming_chat_string is not None.
+                    current_message_str = "".join(self.streaming_chat_string_pieces())
+
+                    # Update session_messages. We need to make a copy to trigger a reactive
+                    # invalidation.
+                    current_message: ChatMessageEnriched = {
+                        "content": current_message_str,
+                        "role": "assistant",
+                        "content_html": ui.markdown(current_message_str),
+                        "token_count": get_token_count(
+                            current_message_str, self.model()
+                        ),
+                    }
+                    self.session_messages.set(
+                        self.session_messages() + (current_message,)
+                    )
+                    self.streaming_chat_string_pieces.set(tuple())
+                    return
 
         @reactive.Effect
-        def copy_messages_to_batch():
-            streaming_chat_messages_batch.set(messages())
+        @reactive.event(self.input.ask, self.ask_trigger)
+        async def perform_query():
+            if self.input.query() == "":
+                return
 
-    @output
-    @render.ui
-    def session_messages_ui():
-        messages_html: list[ui.Tag] = []
-        for message in session_messages():
-            if message["role"] == "system":
-                # Don't show system messages.
-                continue
+            # All previous messages, before we add the new query.
+            prev_session_messages = self.session_messages()
 
-            messages_html.append(
-                ui.div(
-                    {"class": message["role"] + "-message"},
-                    message["content_html"],
-                )
+            # First, add the current query to the session history.
+            current_message: ChatMessageEnriched = {
+                "content": self.input.query(),
+                "role": "user",
+                "content_html": ui.markdown(self.input.query()),
+                "token_count": get_token_count(self.input.query(), self.model()),
+            }
+            self.session_messages.set(prev_session_messages + (current_message,))
+
+            # For the query we're about to send, we need to run the current message through
+            # the preprocessor.
+            current_message_preprocessed: ChatMessageEnriched = current_message.copy()
+            current_message_preprocessed["content"] = await self.query_preprocessor(
+                current_message_preprocessed["content"]
+            )
+            current_message_preprocessed["token_count"] = get_token_count(
+                current_message_preprocessed["content"], self.model()
             )
 
-        return ui.div(*messages_html)
+            # Turn it the set of messages into a list, then we'll go backward through the
+            # list and keep messages until we hit the token limit.
+            session_messages2 = list(prev_session_messages)
+            session_messages2.append(current_message_preprocessed)
 
-    @output
-    @render.ui
-    def current_streaming_message_ui():
-        pieces = streaming_chat_string_pieces()
+            # Count tokens, going backward.
+            outgoing_messages: list[ChatMessageEnriched] = []
+            tokens_total = self.system_prompt_message()["token_count"]
+            for message in reversed(session_messages2):
+                if tokens_total + message["token_count"] > MAX_TOKENS:
+                    break
+                else:
+                    tokens_total += message["token_count"]
+                    outgoing_messages.append(message)
 
-        # Only display this content while streaming. Once the streaming is done, this
-        # content will disappear and an identical-looking one will be added to the
-        # `session_messages_ui` output.
-        if len(pieces) == 0:
-            return ui.div()
+            outgoing_messages.append(self.system_prompt_message())
+            outgoing_messages.reverse()
 
-        content = "".join(pieces)
-        if content == "":
-            content = "\u2026"  # zero-width string
-        else:
-            content = ui.markdown(content)
+            outgoing_messages_normalized = chat_messages_enriched_to_chat_messages(
+                outgoing_messages
+            )
 
-        return ui.div({"class": "assistant-message"}, content)
+            if self.print_request:
+                print(json.dumps(outgoing_messages_normalized, indent=2))
+                print(f"TOKENS USED: {tokens_total}")
 
-    @output
-    @render.ui
-    @reactive.event(streaming_chat_string_pieces)
-    def query_ui():
-        # While streaming an answer, don't show the query input.
-        if len(streaming_chat_string_pieces()) > 0:
-            return ui.div()
+            # Launch a Task that updates the chat string asynchronously. We run this in a
+            # separate task so that the data can come in without need to await it in this
+            # Task (which would block other computation to happen, like running reactive
+            # stuff).
+            messages: StreamResult[
+                openai_api.ChatCompletionStreaming
+            ] = stream_to_reactive(
+                openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
+                    model=self.model(),
+                    messages=outgoing_messages_normalized,
+                    stream=True,
+                    temperature=self.temperature(),
+                ),
+                throttle=self.throttle(),
+            )
 
-        return ui.div(
-            x.ui.input_text_area(
-                "query",
-                None,
-                # value="2+2",
-                # placeholder="Ask me anything...",
-                autoresize=True,
-                rows=1,
-                width="100%",
-            ),
-            ui.div(
-                {"style": "width: 100%; text-align: right;"},
-                ui.input_action_button("ask", "Ask"),
-            ),
-            ui.tags.script(
-                # The explicit focus() call is needed so that the user can type the next
-                # question without clicking on the query box again. However, it's a bit
-                # too aggressive, because it will steal focus if, while the answer is
-                # streaming, the user clicks somewhere else. It would be better to have
-                # the query box set to `display: none` while the answer streams and then
-                # unset afterward, so that it can keep focus, but won't steal focus.
-                "document.getElementById('%s').focus();"
-                % module.resolve_id("query")
-            ),
-        )
+            # Set this to a non-empty tuple (with a blank string), to indicate that
+            # streaming is happening.
+            self.streaming_chat_string_pieces.set(("",))
 
-    def ask_question(query: str, delay: float = 1) -> None:
-        safe_create_task(delayed_set_query(query, delay))
+            @reactive.Effect
+            def copy_messages_to_batch():
+                self.streaming_chat_messages_batch.set(messages())
 
-    async def delayed_set_query(query: str, delay: float) -> None:
+        @self.output
+        @render.ui
+        def session_messages_ui():
+            messages_html: list[ui.Tag] = []
+            for message in self.session_messages():
+                if message["role"] == "system":
+                    # Don't show system messages.
+                    continue
+
+                messages_html.append(
+                    ui.div(
+                        {"class": message["role"] + "-message"},
+                        message["content_html"],
+                    )
+                )
+
+            return ui.div(*messages_html)
+
+        @self.output
+        @render.ui
+        def current_streaming_message_ui():
+            pieces = self.streaming_chat_string_pieces()
+
+            # Only display this content while streaming. Once the streaming is done, this
+            # content will disappear and an identical-looking one will be added to the
+            # `session_messages_ui` output.
+            if len(pieces) == 0:
+                return ui.div()
+
+            content = "".join(pieces)
+            if content == "":
+                content = "\u2026"  # zero-width string
+            else:
+                content = ui.markdown(content)
+
+            return ui.div({"class": "assistant-message"}, content)
+
+        @self.output
+        @render.ui
+        @reactive.event(self.streaming_chat_string_pieces)
+        def query_ui():
+            # While streaming an answer, don't show the query input.
+            if len(self.streaming_chat_string_pieces()) > 0:
+                return ui.div()
+
+            return ui.div(
+                x.ui.input_text_area(
+                    "query",
+                    None,
+                    # value="2+2",
+                    # placeholder="Ask me anything...",
+                    autoresize=True,
+                    rows=1,
+                    width="100%",
+                ),
+                ui.div(
+                    {"style": "width: 100%; text-align: right;"},
+                    ui.input_action_button("ask", "Ask"),
+                ),
+                ui.tags.script(
+                    # The explicit focus() call is needed so that the user can type the next
+                    # question without clicking on the query box again. However, it's a bit
+                    # too aggressive, because it will steal focus if, while the answer is
+                    # streaming, the user clicks somewhere else. It would be better to have
+                    # the query box set to `display: none` while the answer streams and then
+                    # unset afterward, so that it can keep focus, but won't steal focus.
+                    "document.getElementById('%s').focus();"
+                    % module.resolve_id("query")
+                ),
+            )
+
+    def system_prompt_message(self) -> ChatMessageEnriched:
+        return {
+            "role": "system",
+            "content": self.system_prompt(),
+            "content_html": "",
+            "token_count": get_token_count(self.system_prompt(), self.model()),
+        }
+
+    async def delayed_set_query(self, query: str, delay: float) -> None:
         await asyncio.sleep(delay)
         async with reactive.lock():
-            ui.update_text_area("query", value=query, session=session)
+            ui.update_text_area("query", value=query, session=self.session)
             await reactive.flush()
 
         # Short delay before triggering ask_trigger.
-        safe_create_task(delayed_new_query_trigger(0.2))
+        safe_create_task(self.delayed_new_query_trigger(0.2))
 
-    async def delayed_new_query_trigger(delay: float) -> None:
+    async def delayed_new_query_trigger(self, delay: float) -> None:
         await asyncio.sleep(delay)
         async with reactive.lock():
-            ask_trigger.set(ask_trigger() + 1)
+            self.ask_trigger.set(self.ask_trigger() + 1)
             await reactive.flush()
 
-    return ChatSession(session_messages, ask_question)
+    def ask(self, query: str, delay: float = 1) -> None:
+        safe_create_task(self.delayed_set_query(query, delay))
 
 
 # ==============================================================================
