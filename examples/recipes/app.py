@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import webscraper
 from shiny import App, Inputs, Outputs, Session, ui
 
 import chat_ai
-import webscraper
 
 app_ui = ui.page_fixed(
     ui.p(ui.tags.b("Enter the URL for a recipe web page:")),
@@ -57,5 +57,5 @@ The JSON should be structured like this:
 The user will provide text content from a web page.
 It is not very well structured, but the recipe is in there.
 Please look carefully for the useful information about the recipe.
-Important: Return the result as JSON in a code block with three backticks.
+IMPORTANT: Return the result as JSON in a Markdown code block surrounded with three backticks!
 """
