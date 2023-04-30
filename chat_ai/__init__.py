@@ -9,7 +9,6 @@ __all__ = (
     "OpenAiModels",
 )
 
-
 import asyncio
 import functools
 import inspect
@@ -30,7 +29,6 @@ from typing import (
     cast,
 )
 
-import openai
 import shiny.experimental as x
 import tiktoken
 from htmltools import HTMLDependency
@@ -38,10 +36,16 @@ from shiny import Inputs, Outputs, Session, module, reactive, render, ui
 
 from .openai_types import ChatCompletionStreaming, ChatMessage, OpenAiModels
 
+if "pyodide" in sys.modules:
+    from . import openai_pyodide as openai
+else:
+    import openai
+
 if sys.version_info < (3, 10):
     from typing_extensions import ParamSpec, TypeGuard
 else:
     from typing import ParamSpec, TypeGuard
+
 
 T = TypeVar("T")
 P = ParamSpec("P")
