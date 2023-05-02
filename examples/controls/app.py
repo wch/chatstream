@@ -26,7 +26,7 @@ app_ui = x.ui.page_fillable(
         x.ui.sidebar(
             ui.h4("Shiny ChatGPT"),
             ui.hr(),
-            ui.input_select("model", "Model", choices=["gpt-3.5-turbo"]),
+            ui.input_select("model", "Model", choices=["gpt-3.5-turbo", "gpt-4"]),
             ui.input_slider(
                 "temperature",
                 ui.span(

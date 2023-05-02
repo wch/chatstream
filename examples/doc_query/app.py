@@ -19,7 +19,6 @@ from shiny.types import FileInfo
 import chat_ai
 from chat_ai import openai_types
 
-MODEL = "gpt-3.5-turbo"
 # Maximum number of context chunks to send to the API.
 N_DOCUMENTS = 16
 # Maximum number of tokens in the context chunks to send to the API.
@@ -49,10 +48,10 @@ app_ui = x.ui.page_fillable(
             ui.h4("Shiny Document Query"),
             ui.hr(),
             ui.input_file("file", "Drag to upload text or PDF files", multiple=True),
+            ui.input_select("model", "Model", choices=["gpt-3.5-turbo", "gpt-4"]),
             ui.hr(),
             ui.output_ui("uploaded_filenames_ui"),
             ui.hr(),
-            {"class": "sticky-sm-top", "style": "top: 15px;"},
             ui.p(ui.h5("Export conversation")),
             ui.input_radio_buttons(
                 "download_format", None, ["Markdown", "JSON"], inline=True
@@ -106,7 +105,7 @@ def server(input: Inputs, output: Outputs, session: Session):
             token_count = 0
             context = ""
             for doc in results["documents"][0]:
-                result_token_count = get_token_count(doc, MODEL)
+                result_token_count = get_token_count(doc, input.model())
                 if token_count + result_token_count >= CONTEXT_TOKEN_LIMIT:
                     break
 
@@ -132,6 +131,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     chat_session = chat_ai.chat_server(
         "chat1",
+        model=input.model,
         query_preprocessor=add_context_to_query,
         debug=True,
     )
