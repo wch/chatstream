@@ -108,6 +108,7 @@ class chat_server:
         model: OpenAiModels | Callable[[], OpenAiModels] = DEFAULT_MODEL,
         system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
         temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
+        button_label: str | Callable[[], str] = "Ask",
         throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
         query_preprocessor: Callable[[str], str]
         | Callable[[str], Awaitable[str]] = lambda x: x,
@@ -135,6 +136,9 @@ class chat_server:
             Temperature to use. Can be a float or a function that returns a float.
         throttle
             Throttle to use. Can be a float or a function that returns a float.
+        button_label
+            Label to use for the button. Can be a string or a function that returns a
+            string.
         query_preprocessor
             Function that takes a string and returns a string. This is run on the user's
             query before it is sent to the OpenAI API. Note that is run only on the most
@@ -155,6 +159,7 @@ class chat_server:
         )
         self.system_prompt = wrap_function_nonreactive(system_prompt)
         self.temperature = wrap_function_nonreactive(temperature)
+        self.button_label = wrap_function_nonreactive(button_label)
         self.throttle = wrap_function_nonreactive(throttle)
 
         # If query_preprocessor is not async, wrap it in an async function.
@@ -354,7 +359,7 @@ class chat_server:
                 ),
                 ui.div(
                     {"style": "width: 100%; text-align: right;"},
-                    ui.input_action_button("ask", "Ask"),
+                    ui.input_action_button("ask", self.button_label()),
                 ),
                 ui.tags.script(
                     # The explicit focus() call is needed so that the user can type the
