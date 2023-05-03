@@ -16,11 +16,21 @@ def server(input: Inputs, output: Outputs, session: Session):
         "chat1",
         system_prompt=recipe_prompt,
         temperature=0,
-        query_preprocessor=webscraper.scrape_page,
+        query_preprocessor=scrape_page_with_url,
+        button_label="Get Recipe",
     )
 
 
 app = App(app_ui, server)
+
+
+async def scrape_page_with_url(url: str) -> str:
+    """
+    Given a URL, scrapes the web page and return the contents. This also adds adds the
+    URL to the beginning of the text.
+    """
+    contents = await webscraper.scrape_page(url)
+    return f"From: {url}\n\n" + contents
 
 
 recipe_prompt = """
@@ -50,7 +60,8 @@ The JSON should be structured like this:
     "breakfast",
     "eggs",
     "scrambled"
-  ]
+  ],
+  "source": "https://recipes.com/scrambled-eggs/",
 }
 ```
 

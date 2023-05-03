@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 
 
 async def scrape_page(url: str) -> str:
-    # Asynchronously send an HTTP request to the URL
+    # Asynchronously send an HTTP request to the URL.
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
             if response.status != 200:
