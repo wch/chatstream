@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from shiny import App, Inputs, Outputs, Session, ui
 
 import chat_ai
