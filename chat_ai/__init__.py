@@ -34,7 +34,12 @@ import tiktoken
 from htmltools import HTMLDependency
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
 
-from .openai_types import ChatCompletionStreaming, ChatMessage, OpenAiModel
+from .openai_types import (
+    ChatCompletionStreaming,
+    ChatMessage,
+    OpenAiModel,
+    openai_model_context_limits,
+)
 
 if "pyodide" in sys.modules:
     from . import openai_pyodide as openai
@@ -51,7 +56,6 @@ DEFAULT_MODEL: OpenAiModel = "gpt-3.5-turbo"
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_THROTTLE = 0.1
-MAX_TOKENS = 4096
 
 
 T = TypeVar("T")
@@ -265,8 +269,9 @@ class chat_server:
             # Count tokens, going backward.
             outgoing_messages: list[ChatMessageEnriched] = []
             tokens_total = self.system_prompt_message()["token_count"]
+            max_tokens = openai_model_context_limits[self.model()]
             for message in reversed(session_messages2):
-                if tokens_total + message["token_count"] > MAX_TOKENS:
+                if tokens_total + message["token_count"] > max_tokens:
                     break
                 else:
                     tokens_total += message["token_count"]

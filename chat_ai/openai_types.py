@@ -11,6 +11,17 @@ OpenAiModel = Literal[
     "gpt-4-32k-0314",
 ]
 
+openai_model_context_limits: dict[OpenAiModel, int] = {
+    "gpt-3.5-turbo": 4096,
+    "gpt-3.5-turbo-0301": 4096,
+    "gpt-4": 8192,
+    "gpt-4-0314": 8192,
+    "gpt-4-32k": 32768,
+    "gpt-4-32k-0314": 32768,
+}
+
+openai_models: list[OpenAiModel] = list(openai_model_context_limits)
+
 
 class Usage(TypedDict):
     completion_tokens: int  # Note: this doesn't seem to be present in all cases.
