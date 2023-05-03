@@ -6,7 +6,7 @@ __all__ = (
     "chat_ui",
     "chat_server",
     "ChatMessageEnriched",
-    "OpenAiModels",
+    "OpenAiModel",
 )
 
 import asyncio
@@ -34,7 +34,7 @@ import tiktoken
 from htmltools import HTMLDependency
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
 
-from .openai_types import ChatCompletionStreaming, ChatMessage, OpenAiModels
+from .openai_types import ChatCompletionStreaming, ChatMessage, OpenAiModel
 
 if "pyodide" in sys.modules:
     from . import openai_pyodide as openai
@@ -62,7 +62,7 @@ def safe_create_task(task: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
     return t
 
 
-DEFAULT_MODEL: OpenAiModels = "gpt-3.5-turbo"
+DEFAULT_MODEL: OpenAiModel = "gpt-3.5-turbo"
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_THROTTLE = 0.1
@@ -105,7 +105,7 @@ class chat_server:
         output: Outputs,
         session: Session,
         *,
-        model: OpenAiModels | Callable[[], OpenAiModels] = DEFAULT_MODEL,
+        model: OpenAiModel | Callable[[], OpenAiModel] = DEFAULT_MODEL,
         system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
         temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
         button_label: str | Callable[[], str] = "Ask",
@@ -154,7 +154,7 @@ class chat_server:
         # Ensure these are functions, even if we were passed static values.
         self.model = cast(
             # pyright needs a little help with this.
-            Callable[[], OpenAiModels],
+            Callable[[], OpenAiModel],
             wrap_function_nonreactive(model),
         )
         self.system_prompt = wrap_function_nonreactive(system_prompt)
@@ -406,7 +406,7 @@ class chat_server:
 # ==============================================================================
 
 
-def get_token_count(s: str, model: OpenAiModels) -> int:
+def get_token_count(s: str, model: OpenAiModel) -> int:
     encoding = tiktoken.encoding_for_model(model)
     return len(encoding.encode(s))
 

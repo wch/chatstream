@@ -24,7 +24,7 @@ from typing import (
 
 import pyodide  # pyright: ignore[reportMissingImports]
 
-from .openai_types import ChatCompletionStreaming, ChatMessage, OpenAiModels
+from .openai_types import ChatCompletionStreaming, ChatMessage, OpenAiModel
 
 CHAT_API_URL = "https://api.openai.com/v1/chat/completions"
 
@@ -52,7 +52,7 @@ class ChatCompletion:
     async def acreate(
         *,
         messages: list[ChatMessage],
-        model: OpenAiModels,
+        model: OpenAiModel,
         api_key: Optional[str] = None,
         stream: bool = False,
         temperature: float = 0.7,
@@ -92,7 +92,7 @@ class ChatCompletion:
         )
 
         get_reader = cast(
-            Callable[[str, str, OpenAiModels, str, bool, float], Awaitable[Reader]],
+            Callable[[str, str, OpenAiModel, str, bool, float], Awaitable[Reader]],
             get_reader,
         )
 
