@@ -47,27 +47,15 @@ else:
     from typing import ParamSpec, TypeGuard
 
 
-T = TypeVar("T")
-P = ParamSpec("P")
-
-# A place to keep references to Tasks so they don't get GC'd prematurely, as directed in
-# asyncio.create_task docs
-running_tasks: set[asyncio.Task[Any]] = set()
-
-
-def safe_create_task(task: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
-    t = asyncio.create_task(task)
-    running_tasks.add(t)
-    t.add_done_callback(running_tasks.remove)
-    return t
-
-
 DEFAULT_MODEL: OpenAiModel = "gpt-3.5-turbo"
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_THROTTLE = 0.1
-
 MAX_TOKENS = 4096
+
+
+T = TypeVar("T")
+P = ParamSpec("P")
 
 
 # A customized version of ChatMessage, with a field for the Markdown `content` converted
@@ -86,6 +74,9 @@ class ChatMessageEnriched(TypedDict):
     token_count: int
 
 
+# ================================================================================
+# Chat module UI
+# ================================================================================
 @module.ui
 def chat_ui() -> ui.Tag:
     return ui.div(
@@ -97,6 +88,11 @@ def chat_ui() -> ui.Tag:
     )
 
 
+# ================================================================================
+# Chat module server
+# ================================================================================
+# Note that most server modules are implemented as functions, but this one is
+# implemented as a class, to help keep the code more organized.
 @module.server
 class chat_server:
     def __init__(
@@ -116,9 +112,6 @@ class chat_server:
     ):
         """
         Chat server shiny module.
-
-        Note that most server modules are implemented as functions, but this one is
-        implemented as a class.
 
         Parameters
         ----------
@@ -409,6 +402,18 @@ class chat_server:
 def get_token_count(s: str, model: OpenAiModel) -> int:
     encoding = tiktoken.encoding_for_model(model)
     return len(encoding.encode(s))
+
+
+# A place to keep references to Tasks so they don't get GC'd prematurely, as directed in
+# asyncio.create_task docs
+running_tasks: set[asyncio.Task[Any]] = set()
+
+
+def safe_create_task(task: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
+    t = asyncio.create_task(task)
+    running_tasks.add(t)
+    t.add_done_callback(running_tasks.remove)
+    return t
 
 
 class StreamResult(Generic[T]):
