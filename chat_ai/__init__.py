@@ -102,6 +102,7 @@ class chat_server:
         session: Session,
         *,
         model: OpenAiModel | Callable[[], OpenAiModel] = DEFAULT_MODEL,
+        api_key: str | Callable[[], str] | None = None,
         system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
         temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
         button_label: str | Callable[[], str] = "Ask",
@@ -123,6 +124,10 @@ class chat_server:
             Shiny Session object.
         model
             OpenAI model to use. Can be a string or a function that returns a string.
+        api_key
+            OpenAI API key to use (optional). Can be a string or a function that returns
+            a string, or `None`. If `None`, then it will use the `OPENAI_API_KEY`
+            environment variable for the key.
         system_prompt
             System prompt to use. Can be a string or a function that returns a string.
         temperature
@@ -150,6 +155,11 @@ class chat_server:
             Callable[[], OpenAiModel],
             wrap_function_nonreactive(model),
         )
+        if api_key is None:
+            self.api_key = get_env_var_api_key
+        else:
+            self.api_key = wrap_function_nonreactive(api_key)
+
         self.system_prompt = wrap_function_nonreactive(system_prompt)
         self.temperature = wrap_function_nonreactive(temperature)
         self.button_label = wrap_function_nonreactive(button_label)
@@ -280,6 +290,7 @@ class chat_server:
             messages: StreamResult[ChatCompletionStreaming] = stream_to_reactive(
                 openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
                     model=self.model(),
+                    api_key=self.api_key(),
                     messages=outgoing_messages_normalized,
                     stream=True,
                     temperature=self.temperature(),
@@ -397,6 +408,18 @@ class chat_server:
 # ==============================================================================
 # Helper functions
 # ==============================================================================
+
+
+def get_env_var_api_key() -> str:
+    import os
+
+    key = os.environ.get("OPENAI_API_KEY")
+    if key is None:
+        raise ValueError(
+            "Please set the OPENAI_API_KEY environment variable to your OpenAI API key."
+        )
+
+    return key
 
 
 def get_token_count(s: str, model: OpenAiModel) -> int:
