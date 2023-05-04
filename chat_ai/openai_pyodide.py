@@ -53,15 +53,16 @@ class ChatCompletion:
         *,
         messages: list[ChatMessage],
         model: OpenAiModel,
-        api_key: Optional[str] = None,
+        api_key: str,
+        url: Optional[str] = None,
         stream: bool = False,
         temperature: float = 0.7,
         # timeout,
         # headers,
         # request_timeout,
     ) -> AsyncGenerator[ChatCompletionStreaming, None]:
-        if api_key is None:
-            api_key = DEFAULT_API_KEY
+        if url is None:
+            url = CHAT_API_URL
 
         get_reader = pyodide.code.run_js(  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
             """

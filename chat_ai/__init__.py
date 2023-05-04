@@ -107,6 +107,7 @@ class chat_server:
         *,
         model: OpenAiModel | Callable[[], OpenAiModel] = DEFAULT_MODEL,
         api_key: str | Callable[[], str] | None = None,
+        url: str | Callable[[], str] | None = None,
         system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
         temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
         button_label: str | Callable[[], str] = "Ask",
@@ -132,6 +133,10 @@ class chat_server:
             OpenAI API key to use (optional). Can be a string or a function that returns
             a string, or `None`. If `None`, then it will use the `OPENAI_API_KEY`
             environment variable for the key.
+        url
+            OpenAI API endpoint to use (optional). Can be a string or a function that
+            returns a string, or `None`. If `None`, then it will use the default OpenAI
+            API endpoint.
         system_prompt
             System prompt to use. Can be a string or a function that returns a string.
         temperature
@@ -164,6 +169,7 @@ class chat_server:
         else:
             self.api_key = wrap_function_nonreactive(api_key)
 
+        self.url = wrap_function_nonreactive(url)
         self.system_prompt = wrap_function_nonreactive(system_prompt)
         self.temperature = wrap_function_nonreactive(temperature)
         self.button_label = wrap_function_nonreactive(button_label)
@@ -288,6 +294,10 @@ class chat_server:
                 print(json.dumps(outgoing_messages_normalized, indent=2))
                 print(f"TOKENS USED: {tokens_total}")
 
+            extra_kwargs = {}
+            if self.url() is not None:
+                extra_kwargs["url"] = self.url()
+
             # Launch a Task that updates the chat string asynchronously. We run this in
             # a separate task so that the data can come in without need to await it in
             # this Task (which would block other computation to happen, like running
@@ -299,6 +309,7 @@ class chat_server:
                     messages=outgoing_messages_normalized,
                     stream=True,
                     temperature=self.temperature(),
+                    **extra_kwargs,
                 ),
                 throttle=self.throttle(),
             )
