@@ -110,6 +110,7 @@ class chat_server:
         url: str | Callable[[], str] | None = None,
         system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
         temperature: float | Callable[[], float] = DEFAULT_TEMPERATURE,
+        text_input_placeholder: str | Callable[[], str] | None = None,
         button_label: str | Callable[[], str] = "Ask",
         throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
         query_preprocessor: Callable[[str], str]
@@ -145,6 +146,9 @@ class chat_server:
             System prompt to use. Can be a string or a function that returns a string.
         temperature
             Temperature to use. Can be a float or a function that returns a float.
+        text_input_placeholder
+            Placeholder teext to use for the text input. Can be a string or a function
+            that returns a string, or `None` for no placeholder.
         throttle
             Throttle to use. Can be a float or a function that returns a float.
         button_label
@@ -178,6 +182,7 @@ class chat_server:
         self.temperature = wrap_function_nonreactive(temperature)
         self.button_label = wrap_function_nonreactive(button_label)
         self.throttle = wrap_function_nonreactive(throttle)
+        self.text_input_placeholder = wrap_function_nonreactive(text_input_placeholder)
 
         if query_preprocessor is None:
             query_preprocessor = lambda x: x
@@ -384,7 +389,7 @@ class chat_server:
                     "query",
                     None,
                     # value="2+2",
-                    # placeholder="Ask me anything...",
+                    placeholder=self.text_input_placeholder(),
                     autoresize=True,
                     rows=1,
                     width="100%",
