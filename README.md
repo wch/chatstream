@@ -3,7 +3,7 @@ Chat AI package for Shiny for Python
 
 The chat_ai package provides a [Shiny for Python](https://shiny.rstudio.com/py/) module for building AI chat applications. Please keep in mind that this is very much a work in progress, and the API is likely to change.
 
-It currently supports the OpenAI API.
+It currently supports the OpenAI API. To use this, you must have an OpenAI API key. You can get one from the [OpenAI](https://platform.openai.com/account/api-keys) or from [Azure's OpenAI Service](https://azure.microsoft.com/en-us/products/cognitive-services/openai-service). (Note that if you have use Azure, you will need to point the applications to the Azure endpoint instead of the default OpenAI endpoint.)
 
 
 ## Installation
@@ -48,6 +48,6 @@ shiny run examples/recipes/app.py --launch-browser
 
 ## FAQ
 
-* **Does this work with [Shinylive](https://shiny.rstudio.com/py/docs/shinylive.html)?** It does not. The `openai` package has dependencies which do not install on [Pyodide](https://pyodide.org/). However, it may be possible in Pyodide to use the browser `fetch` API to make requests to the OpenAI API directly.
+* **Does this work with [Shinylive](https://shiny.rstudio.com/py/docs/shinylive.html)?** It almost does. The `openai` package has dependencies which do not install on [Pyodide](https://pyodide.org/), but chat_ai currently has an `openai_pyodide` shim which uses the browser's `fetch` API. However, there is one more hurdle: the `tiktoken` package (which counts the number of tokens used by a piece of text) needs to be built to run on Pyodide.
 
 * **Does this work with [langchain](https://github.com/hwchase17/langchain)?** It currently does not. Note that most of the langchain interfaces do not support streaming responses, so instead of showing responses as each word comes in, there is a wait and then the entire response arrives at once.
