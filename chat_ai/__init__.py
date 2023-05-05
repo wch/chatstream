@@ -74,7 +74,7 @@ class ChatMessageEnriched(TypedDict):
 
     # The HTML version of the message. This is what is displayed in the chat UI. It is
     # usually the result of running `ui.markdown(content)`.
-    content_html: str
+    content_html: ui.TagChild
     token_count: int
 
 
@@ -113,7 +113,11 @@ class chat_server:
         button_label: str | Callable[[], str] = "Ask",
         throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
         query_preprocessor: Callable[[str], str]
-        | Callable[[str], Awaitable[str]] = lambda x: x,
+        | Callable[[str], Awaitable[str]]
+        | None = None,
+        answer_preprocessor: Callable[[str], ui.TagChild]
+        | Callable[[str], Awaitable[ui.TagChild]]
+        | None = None,
         debug: bool = False,
     ):
         """
@@ -175,8 +179,14 @@ class chat_server:
         self.button_label = wrap_function_nonreactive(button_label)
         self.throttle = wrap_function_nonreactive(throttle)
 
-        # If query_preprocessor is not async, wrap it in an async function.
+        if query_preprocessor is None:
+            query_preprocessor = lambda x: x
         self.query_preprocessor = wrap_async(query_preprocessor)
+
+        if answer_preprocessor is None:
+            # This lambda wrapper is needed to make pyright happy
+            answer_preprocessor = lambda x: ui.markdown(x)
+        self.answer_preprocessor = wrap_async(answer_preprocessor)
 
         self.print_request = debug
 
@@ -209,7 +219,7 @@ class chat_server:
     def _init_reactives(self) -> None:
         @reactive.Effect
         @reactive.event(self.streaming_chat_messages_batch)
-        def finalize_streaming_result():
+        async def finalize_streaming_result():
             current_batch = self.streaming_chat_messages_batch()
 
             for message in current_batch:
@@ -228,7 +238,9 @@ class chat_server:
                     current_message: ChatMessageEnriched = {
                         "content": current_message_str,
                         "role": "assistant",
-                        "content_html": ui.markdown(current_message_str),
+                        "content_html": await self.answer_preprocessor(
+                            current_message_str
+                        ),
                         "token_count": get_token_count(
                             current_message_str, self.model()
                         ),
@@ -342,7 +354,7 @@ class chat_server:
 
         @self.output
         @render.ui
-        def current_streaming_message_ui():
+        async def current_streaming_message_ui():
             pieces = self.streaming_chat_string_pieces()
 
             # Only display this content while streaming. Once the streaming is done,
@@ -355,7 +367,7 @@ class chat_server:
             if content == "":
                 content = "\u2026"  # zero-width string
             else:
-                content = ui.markdown(content)
+                content = await self.answer_preprocessor(content)
 
             return ui.div({"class": "assistant-message"}, content)
 
