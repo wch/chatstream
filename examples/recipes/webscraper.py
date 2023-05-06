@@ -31,6 +31,8 @@ async def scrape_page(url: str) -> str:
         "social",
         "breadcrumb",
         "pagination",
+        "comment",
+        "comments",
     ]
 
     # Remove unwanted elements by ID or class name
