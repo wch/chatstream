@@ -11,6 +11,10 @@ from shiny import App, Inputs, Outputs, Session, render, ui
 
 import chat_ai
 
+# Max length of recipe text to process. This is to prevent the model from running out of
+# tokens. 14000 bytes translates to approximately 3200 tokens.
+RECIPE_TEXT_MAX_LENGTH = 14000
+
 
 class Recipe(TypedDict):
     title: str
@@ -36,7 +40,6 @@ app_ui = ui.page_fixed(
     ui.tags.style(custom_css),
     chat_ai.chat_ui("chat1"),
     ui.output_ui("add_button_ui"),
-    # ui.output_ui("recipe_test"),
 )
 
 
@@ -71,6 +74,11 @@ async def scrape_page_with_url(url: str) -> str:
     URL to the beginning of the text.
     """
     contents = await webscraper.scrape_page(url)
+    # Trim the string so that the prompt and reply will fit in the token limit.. It
+    # would be better to trim by tokens, but that requires using the tiktoken package,
+    # which can be very slow to load when running on containerized servers, because it
+    # needs to download the model from the internet each time the container starts.
+    contents = contents[:RECIPE_TEXT_MAX_LENGTH]
     return f"From: {url}\n\n" + contents
 
 
