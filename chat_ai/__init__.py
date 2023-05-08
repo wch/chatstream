@@ -201,27 +201,27 @@ class chat_server:
             tuple[ChatCompletionStreaming, ...]
         ] = reactive.Value(tuple())
 
-        # This is the current streaming chat string, in the form of a tuple of strings,
-        # one string from each message. When not streaming, it is empty.
         self.streaming_chat_string_pieces: reactive.Value[
             tuple[str, ...]
         ] = reactive.Value(tuple())
+        """This is the current streaming chat content from the AI assistant, in the form
+        of a tuple of strings, one string from each message. When not streaming, it is
+        empty."""
 
         self.session_messages: reactive.Value[
             tuple[ChatMessageEnriched, ...]
         ] = reactive.Value(tuple())
+        "All of the user and assistant messages in the conversation."
 
         self.ask_trigger = reactive.Value(0)
-
-        # This is the current streaming chat string, in the form of a tuple of strings,
-        # one string from each message. When not streaming, it is empty.
-        self.streaming_chat_string_pieces: reactive.Value[
-            tuple[str, ...]
-        ] = reactive.Value(tuple())
 
         self._init_reactives()
 
     def _init_reactives(self) -> None:
+        """
+        This method initializes the reactive components of this class.
+        """
+
         @reactive.Effect
         @reactive.event(self.streaming_chat_messages_batch)
         async def finalize_streaming_result():
@@ -291,7 +291,7 @@ class chat_server:
 
             # Count tokens, going backward.
             outgoing_messages: list[ChatMessageEnriched] = []
-            tokens_total = self.system_prompt_message()["token_count"]
+            tokens_total = self._system_prompt_message()["token_count"]
             max_tokens = openai_model_context_limits[self.model()]
             for message in reversed(session_messages2):
                 if tokens_total + message["token_count"] > max_tokens:
@@ -300,7 +300,7 @@ class chat_server:
                     tokens_total += message["token_count"]
                     outgoing_messages.append(message)
 
-            outgoing_messages.append(self.system_prompt_message())
+            outgoing_messages.append(self._system_prompt_message())
             outgoing_messages.reverse()
 
             outgoing_messages_normalized = chat_messages_enriched_to_chat_messages(
@@ -411,7 +411,7 @@ class chat_server:
                 ),
             )
 
-    def system_prompt_message(self) -> ChatMessageEnriched:
+    def _system_prompt_message(self) -> ChatMessageEnriched:
         return {
             "role": "system",
             "content": self.system_prompt(),
@@ -419,7 +419,7 @@ class chat_server:
             "token_count": get_token_count(self.system_prompt(), self.model()),
         }
 
-    async def delayed_set_query(self, query: str, delay: float) -> None:
+    async def _delayed_set_query(self, query: str, delay: float) -> None:
         await asyncio.sleep(delay)
         async with reactive.lock():
             ui.update_text_area("query", value=query, session=self.session)
@@ -435,7 +435,7 @@ class chat_server:
             await reactive.flush()
 
     def ask(self, query: str, delay: float = 1) -> None:
-        safe_create_task(self.delayed_set_query(query, delay))
+        safe_create_task(self._delayed_set_query(query, delay))
 
 
 # ==============================================================================
