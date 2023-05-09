@@ -62,8 +62,7 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-# A customized version of ChatMessage, with a field for the Markdown `content` converted
-# to HTML, and a field for counting the number of tokens in the message.
+# A customized version of ChatMessage, with fields for storing extra information.
 class ChatMessageEnriched(TypedDict):
     role: Literal["system", "user", "assistant"]
 
@@ -75,6 +74,7 @@ class ChatMessageEnriched(TypedDict):
     # The HTML version of the message. This is what is displayed in the chat UI. It is
     # usually the result of running `ui.markdown(content)`.
     content_html: ui.TagChild
+    # Number of tokens in the message.
     token_count: int
 
 
@@ -208,14 +208,25 @@ class chat_server:
         of a tuple of strings, one string from each message. When not streaming, it is
         empty."""
 
+        self._ask_trigger = reactive.Value(0)
+
         self.session_messages: reactive.Value[
             tuple[ChatMessageEnriched, ...]
         ] = reactive.Value(tuple())
         "All of the user and assistant messages in the conversation."
 
-        self.ask_trigger = reactive.Value(0)
+        self.hide_query_ui: reactive.Value[bool] = reactive.Value(False)
+        "This can be set to True to hide the query UI."
 
+        self.reset()
         self._init_reactives()
+
+    def reset(self) -> None:
+        """
+        Reset the state of this chat_server. Should not be called while streaming.
+        """
+        self.session_messages.set(tuple())
+        self.hide_query_ui.set(False)
 
     def _init_reactives(self) -> None:
         """
@@ -257,7 +268,7 @@ class chat_server:
                     return
 
         @reactive.Effect
-        @reactive.event(self.input.ask, self.ask_trigger)
+        @reactive.event(self.input.ask, self._ask_trigger)
         async def perform_query():
             if self.input.query() == "":
                 return
@@ -378,10 +389,10 @@ class chat_server:
 
         @self.output
         @render.ui
-        @reactive.event(self.streaming_chat_string_pieces)
+        @reactive.event(self.hide_query_ui, self.streaming_chat_string_pieces)
         def query_ui():
             # While streaming an answer, don't show the query input.
-            if len(self.streaming_chat_string_pieces()) > 0:
+            if self.hide_query_ui() or len(self.streaming_chat_string_pieces()) > 0:
                 return ui.div()
 
             return ui.div(
@@ -431,7 +442,7 @@ class chat_server:
     async def delayed_new_query_trigger(self, delay: float) -> None:
         await asyncio.sleep(delay)
         async with reactive.lock():
-            self.ask_trigger.set(self.ask_trigger() + 1)
+            self._ask_trigger.set(self._ask_trigger() + 1)
             await reactive.flush()
 
     def ask(self, query: str, delay: float = 1) -> None:
