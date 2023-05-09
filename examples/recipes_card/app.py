@@ -7,7 +7,7 @@ import shiny
 import shiny.experimental as x
 import webscraper
 import yaml
-from shiny import App, Inputs, Outputs, Session, render, ui
+from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 
 import chat_ai
 
@@ -54,15 +54,39 @@ def server(input: Inputs, output: Outputs, session: Session):
         button_label="Get Recipe",
     )
 
+    @reactive.Calc
+    def finished_streaming():
+        session_messages = chat_module.session_messages()
+        if len(session_messages) >= 1 and session_messages[-1]["role"] == "assistant":
+            chat_module.hide_query_ui.set(True)
+            return True
+        else:
+            return False
+
     @output
     @render.ui
     def add_button_ui():
-        session_messages = chat_module.session_messages()
-        if len(session_messages) >= 1 and session_messages[-1]["role"] == "assistant":
-            print(session_messages[-1]["content"])
-            return ui.input_action_button("add_button", "Add Recipe")
-        else:
-            return None
+        if finished_streaming():
+            return ui.div(
+                {"class": "float-end"},
+                ui.input_action_button(
+                    "start_over", "Start Over", class_="btn-secondary"
+                ),
+                " ",
+                ui.input_action_button(
+                    "add_recipe", "Add Recipe", class_="btn-success"
+                ),
+            )
+
+    @reactive.Effect
+    @reactive.event(input.add_recipe)
+    def add_recipe():
+        print("Add recipe here!")
+
+    @reactive.Effect
+    @reactive.event(input.start_over)
+    def start_over():
+        chat_module.reset()
 
 
 app = App(app_ui, server)
@@ -82,8 +106,8 @@ async def scrape_page_with_url(url: str) -> str:
     return f"From: {url}\n\n" + contents
 
 
-def answer_to_recipe_card(streaming_answer: str) -> ui.TagChild:
-    txt = re.sub(r"^```.*", "", streaming_answer, flags=re.MULTILINE)
+def answer_to_recipe_card(answer: str) -> ui.TagChild:
+    txt = re.sub(r"^```.*", "", answer, flags=re.MULTILINE)
 
     recipe: Recipe | None = None
     try:
@@ -94,8 +118,8 @@ def answer_to_recipe_card(streaming_answer: str) -> ui.TagChild:
     if recipe is None:
         return None
     if not isinstance(recipe, dict):
-        # Sometimes at the very beginning the YAML parser will return a string. We need
-        # a dictionary.
+        # Sometimes at the very beginning the YAML parser will return a string, but to
+        # create a card, we need a dictionary.
         return None
 
     return recipe_card(recipe)
