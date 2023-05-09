@@ -129,7 +129,7 @@ def server(input: Inputs, output: Outputs, session: Session):
 
         return prompt_template
 
-    chat_session = chat_ai.chat_server(
+    chat_session = chatstream.chat_server(
         "chat1",
         model=input.model,
         query_preprocessor=add_context_to_query,
@@ -158,7 +158,7 @@ def server(input: Inputs, output: Outputs, session: Session):
                 ui.h4("Upload a file to get started..."),
             )
         else:
-            return chat_ai.chat_ui("chat1")
+            return chatstream.chat_ui("chat1")
 
     @output
     @render.ui
@@ -181,7 +181,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     @session.download(filename=download_conversation_filename)
     def download_conversation() -> Generator[str, None, None]:
         if input.download_format() == "JSON":
-            res = chat_ai.chat_messages_enriched_to_chat_messages(
+            res = chatstream.chat_messages_enriched_to_chat_messages(
                 chat_session.session_messages()
             )
             yield json.dumps(res, indent=2)

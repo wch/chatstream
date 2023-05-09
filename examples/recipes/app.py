@@ -3,7 +3,7 @@ from __future__ import annotations
 import webscraper
 from shiny import App, Inputs, Outputs, Session, ui
 
-import chat_ai
+import chatstream
 
 # Max length of recipe text to process. This is to prevent the model from running out of
 # tokens. 14000 bytes translates to approximately 3200 tokens.
@@ -12,12 +12,12 @@ RECIPE_TEXT_MAX_LENGTH = 14000
 
 app_ui = ui.page_fixed(
     ui.p(ui.tags.b("Enter the URL for a recipe web page:")),
-    chat_ai.chat_ui("chat1"),
+    chatstream.chat_ui("chat1"),
 )
 
 
 def server(input: Inputs, output: Outputs, session: Session):
-    chat_ai.chat_server(
+    chatstream.chat_server(
         "chat1",
         system_prompt=recipe_prompt,
         temperature=0,

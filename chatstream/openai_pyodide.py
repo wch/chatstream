@@ -1,7 +1,7 @@
 """
 This file is a shim for the openai library, which can't be used in Pyodide because it
 depends on some libraries which are not available in Pyodide. It only fills in the parts
-of the openai library that are used by the chat_ai module.
+of the openai library that are used by the chatstream module.
 """
 from __future__ import annotations
 

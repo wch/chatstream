@@ -9,7 +9,7 @@ import webscraper
 import yaml
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 
-import chat_ai
+import chatstream
 
 # Max length of recipe text to process. This is to prevent the model from running out of
 # tokens. 14000 bytes translates to approximately 3200 tokens.
@@ -38,13 +38,13 @@ custom_css = """
 app_ui = ui.page_fixed(
     {"style": "max-width: 960px;"},
     ui.tags.style(custom_css),
-    chat_ai.chat_ui("chat1"),
+    chatstream.chat_ui("chat1"),
     ui.output_ui("add_button_ui"),
 )
 
 
 def server(input: Inputs, output: Outputs, session: Session):
-    chat_module = chat_ai.chat_server(
+    chat_module = chatstream.chat_server(
         "chat1",
         system_prompt=recipe_prompt,
         temperature=0,

@@ -73,8 +73,8 @@ dist: clean ## builds source and wheel package
 # --force-reinstall also reinstalls all deps. And if we also used --no-deps,
 # then the deps wouldn't be installed the first time.
 install: dist
-	pip uninstall -y chat_ai
-	python3 -m pip install dist/chat_ai.whl
+	pip uninstall -y chatstream
+	python3 -m pip install dist/chatstream.whl
 
 install-deps: ## install dependencies
 	pip install -e ".[dev,test]"

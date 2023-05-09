@@ -7,8 +7,8 @@ from typing import Generator, Sequence
 import shiny.experimental as x
 from shiny import App, Inputs, Outputs, Session, ui
 
-import chat_ai
-from chat_ai import openai_types
+import chatstream
+from chatstream import openai_types
 
 # Code for initializing popper.js tooltips.
 tooltip_init_js = """
@@ -84,7 +84,7 @@ app_ui = x.ui.page_fillable(
             ),
             position="right",
         ),
-        chat_ai.chat_ui("chat1"),
+        chatstream.chat_ui("chat1"),
         # Initialize the tooltips at the bottom of the page (after the content is in the DOM)
         ui.tags.script(tooltip_init_js),
     ),
@@ -95,7 +95,7 @@ app_ui = x.ui.page_fillable(
 
 
 def server(input: Inputs, output: Outputs, session: Session):
-    chat_session = chat_ai.chat_server(
+    chat_session = chatstream.chat_server(
         "chat1",
         model=input.model,
         system_prompt=input.system_prompt,
@@ -113,7 +113,7 @@ def server(input: Inputs, output: Outputs, session: Session):
     @session.download(filename=download_conversation_filename)
     def download_conversation() -> Generator[str, None, None]:
         if input.download_format() == "JSON":
-            res = chat_ai.chat_messages_enriched_to_chat_messages(
+            res = chatstream.chat_messages_enriched_to_chat_messages(
                 chat_session.session_messages()
             )
             yield json.dumps(res, indent=2)

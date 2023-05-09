@@ -620,7 +620,7 @@ def _chat_dependency():
     return HTMLDependency(
         "shiny-gpt-chat",
         "0.0.0",
-        source={"package": "chat_ai", "subdir": "assets"},
+        source={"package": "chatstream", "subdir": "assets"},
         script={"src": "chat.js"},
         stylesheet={"href": "chat.css"},
     )
