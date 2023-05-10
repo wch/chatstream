@@ -42,13 +42,31 @@ jobs:
           make site
 
       # =====================================================
-      # Publish
+      # Upload site/ artifact
       # =====================================================
-      - name: Publish to GitHub Pages
-        uses: quarto-dev/quarto-actions/publish@v2
+      - name: Upload site/ artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v1
         with:
-          target: gh-pages
-          render: false
-          path: docs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # this secret is always available for github actions
+          path: "docs/_site/"
+
+
+  # =====================================================
+  # Deploy GitHub Pages site
+  # =====================================================
+  deploy_gh_pages:
+    needs: build
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
