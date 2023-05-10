@@ -1,0 +1,6 @@
+chromadb
+pypdf
+langchain
+tiktoken
+shiny
+chatstream@git+https://github.com/wch/chatstream.git
