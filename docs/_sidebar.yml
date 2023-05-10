@@ -1,0 +1,9 @@
+website:
+  sidebar:
+    contents:
+    - reference/index.qmd
+    - contents:
+      - reference/chat_ui.qmd
+      - reference/chat_server.qmd
+      section: chatstream
+    id: reference
