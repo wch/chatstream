@@ -11,7 +11,6 @@ RECIPE_TEXT_MAX_LENGTH = 14000
 
 
 app_ui = ui.page_fixed(
-    ui.p(ui.tags.b("Enter the URL for a recipe web page:")),
     chatstream.chat_ui("chat1"),
 )
 
@@ -21,6 +20,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         "chat1",
         system_prompt=recipe_prompt,
         temperature=0,
+        text_input_placeholder="Enter a recipe URL...",
         query_preprocessor=scrape_page_with_url,
         button_label="Get Recipe",
     )

@@ -16,8 +16,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 from shiny.types import FileInfo
 
-import chat_ai
-from chat_ai import openai_types
+import chatstream
+from chatstream import openai_types
 
 # Maximum number of context chunks to send to the API.
 N_DOCUMENTS = 16
