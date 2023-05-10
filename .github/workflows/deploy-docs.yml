@@ -55,6 +55,7 @@ jobs:
   # Deploy GitHub Pages site
   # =====================================================
   deploy_gh_pages:
+    if: github.ref == 'refs/heads/main'
     needs: build
 
     permissions:
