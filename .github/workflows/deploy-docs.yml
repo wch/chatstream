@@ -41,11 +41,10 @@ jobs:
           make quartodoc
           make site
 
-
       # =====================================================
-      # Commit docs to deploy branch
+      # Publish
       # =====================================================
-      - name: Publish to GitHub Pages (and render)
+      - name: Publish to GitHub Pages
         uses: quarto-dev/quarto-actions/publish@v2
         with:
           target: gh-pages
