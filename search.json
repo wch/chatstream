@@ -1,0 +1,30 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "chatstream",
+    "section": "",
+    "text": "The chatstream package provides a Shiny for Python module for building AI chat applications. Please keep in mind that this is very much a work in progress, and the API is likely to change.\nIt currently supports the OpenAI API. To use this, you must have an OpenAI API key. You can get one from the OpenAI or from Azure’s OpenAI Service. (Note that if you have use Azure, you will need to point the applications to the Azure endpoint instead of the default OpenAI endpoint.)\n\n\nThe chatstream package is not on PyPI, but can be installed with pip:\npip install chatstream@git+https://github.com/wch/chatstream.git\nAlternatively, if you’d like to develop a local copy of the package, first clone the repository and then install it with pip:\ncd chatstream\npip install -e .[dev]\n\n\n\nBefore running any examples, you must set an environment variable named OPENAI_API_KEY with your OpenAI API key.\nYou can set the environment variable with the following command:\nexport OPENAI_API_KEY=\"<your_openai_api_key>\"\nThen run:\nshiny run examples/basic/app.py --launch-browser\nSome examples (like recipes) have a requirements.txt file. For those examples, first install the requirements, then run the application as normal:\npip install -r examples/recipes/requirements.txt\nshiny run examples/recipes/app.py --launch-browser\n\n\n\n\nDoes this work with Shinylive? It almost does. The openai package has dependencies which do not install on Pyodide, but chatstream currently has an openai_pyodide shim which uses the browser’s fetch API. However, there is one more hurdle: the tiktoken package (which counts the number of tokens used by a piece of text) needs to be built to run on Pyodide.\nDoes this work with langchain? It currently does not. Note that most of the langchain interfaces do not support streaming responses, so instead of showing responses as each word comes in, there is a wait and then the entire response arrives at once."
+  },
+  {
+    "objectID": "reference/chat_server.html",
+    "href": "reference/chat_server.html",
+    "title": "chatstream",
+    "section": "",
+    "text": "chat_server(self, input, output, session, *, model=DEFAULT_MODEL, api_key=None, url=None, system_prompt=DEFAULT_SYSTEM_PROMPT, temperature=DEFAULT_TEMPERATURE, text_input_placeholder=None, button_label='Ask', throttle=DEFAULT_THROTTLE, query_preprocessor=None, answer_preprocessor=None, debug=False)\nServer portion of chatstream Shiny module.\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\nDefault\n\n\n\n\nmodel\nOpenAiModel | Callable[[], OpenAiModel]\nOpenAI model to use. Can be a string or a function that returns a string.\nDEFAULT_MODEL\n\n\napi_key\nstr | Callable[[], str] | None\nOpenAI API key to use (optional). Can be a string or a function that returns a string, or None. If None, then it will use the OPENAI_API_KEY environment variable for the key.\nNone\n\n\nurl\nstr | Callable[[], str] | None\nOpenAI API endpoint to use (optional). Can be a string or a function that returns a string, or None. If None, then it will use the default OpenAI API endpoint.\nNone\n\n\nsystem_prompt\nstr | Callable[[], str]\nSystem prompt to use. Can be a string or a function that returns a string.\nDEFAULT_SYSTEM_PROMPT\n\n\ntemperature\nfloat | Callable[[], float]\nTemperature to use. Can be a float or a function that returns a float.\nDEFAULT_TEMPERATURE\n\n\ntext_input_placeholder\nstr | Callable[[], str] | None\nPlaceholder teext to use for the text input. Can be a string or a function that returns a string, or None for no placeholder.\nNone\n\n\nthrottle\nfloat | Callable[[], float]\nThrottle interval to use for incoming streaming messages. Can be a float or a function that returns a float.\nDEFAULT_THROTTLE\n\n\nbutton_label\nstr | Callable[[], str]\nLabel to use for the button. Can be a string or a function that returns a string.\n'Ask'\n\n\nquery_preprocessor\nCallable[[str], str] | Callable[[str], Awaitable[str]] | None\nFunction that takes a string and returns a string. This is run on the user’s query before it is sent to the OpenAI API. Note that is run only on the most recent query; previous messages in the chat history are not run through this function.\nNone\n\n\nanswer_preprocessor\nCallable[[str], ui.TagChild] | Callable[[str], Awaitable[ui.TagChild]] | None\nFunction that tags a string and returns a TagChild. This is run on the answer from the AI assistant before it is displayed in the chat UI. Note that is run on streaming data. As each piece of streaming data comes in, the entire accumulated string is run through this function.\nNone\n\n\ndebug\nbool\nWhether to print debugging infromation to the console.\nFalse\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nName\nType\nDescription\n\n\n\n\nsession_messages\nreactive.Value[tuple[ChatMessageEnriched, …]]\nAll of the user and assistant messages in the conversation.\n\n\nhide_query_ui\nreactive.Value[bool]\nThis can be set to True to hide the query UI.\n\n\nstreaming_chat_string_pieces\nreactive.Value[tuple[str, …]]\nThis is the current streaming chat content from the AI assistant, in the form of\n\n\n\na tuple of strings, one string from each message. When not streaming, it is empty. |\n\n\n\n\n\n\nName\nDescription\n\n\n\n\nask\nProgrammatically ask a question.\n\n\nreset\nReset the state of this chat_server. Should not be called while streaming.\n\n\n\n\n\nchat_server.ask(self, query, delay=1)\nProgrammatically ask a question.\n\n\n\nchat_server.reset(self)\nReset the state of this chat_server. Should not be called while streaming."
+  },
+  {
+    "objectID": "reference/index.html",
+    "href": "reference/index.html",
+    "title": "chatstream",
+    "section": "",
+    "text": "chat_ui\nUI portion of chatstream Shiny module.\n\n\nchat_server\nServer portion of chatstream Shiny module."
+  },
+  {
+    "objectID": "reference/chat_ui.html",
+    "href": "reference/chat_ui.html",
+    "title": "chatstream",
+    "section": "",
+    "text": "chat_ui\nchat_ui()\nUI portion of chatstream Shiny module."
+  }
+]
