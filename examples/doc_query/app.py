@@ -67,7 +67,7 @@ app_ui = x.ui.page_fillable(
             ui.p(
                 ui.a(
                     "Source code",
-                    href="https://github.com/wch/shiny-openai-chat",
+                    href="https://github.com/wch/chatstream",
                     target="_blank",
                 ),
             ),
