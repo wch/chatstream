@@ -1,0 +1,61 @@
+project:
+  type: website
+  # pre-render: version_config.py
+  output-dir: _site
+
+format:
+  html:
+    theme: sandstone
+
+website:
+  title: "chatstream"
+  description: "A Python package for building AI chat applications with Shiny."
+  repo-url: https://github.com/wch/chatstream
+  repo-actions: [edit, issue]
+  page-navigation: true
+  favicon: "figures/logo.svg"
+  navbar:
+    background: primary
+    pinned: true
+    search: true
+    left:
+      - text: "Reference"
+        file: reference/index.qmd
+    right:
+      - icon: github
+        href: https://github.com/wch/chatstream
+        aria-label: Chatstream on GitHub
+
+  sidebar:
+    - id: reference
+      contents: "_sidebar.yml"
+
+quartodoc:
+  package: chatstream
+  style: pkgdown
+  title: "chatstream"
+  renderer:
+    style: markdown
+  sidebar: "_sidebar.yml"
+  sections:
+    - title: chatstream
+      desc: ""
+      contents:
+        - chat_ui
+        - chat_server
+
+metadata-files:
+  - _sidebar.yml
+
+filters:
+  - interlinks
+
+interlinks:
+  sources:
+    python:
+      url: https://docs.python.org/3/
+    # shiny:
+    #   url: https://shiny.rstudio.com/py/api/
+
+profile:
+  default: latest

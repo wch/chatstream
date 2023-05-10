@@ -1,0 +1,5 @@
+# chat_ui { #chatstream.chat_ui }
+
+`chat_ui()`
+
+UI portion of chatstream Shiny module.

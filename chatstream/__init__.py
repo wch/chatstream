@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__version__ = "0.0.0"
+__version__ = "0.0.1"
 
 __all__ = (
     "chat_ui",
@@ -62,8 +62,9 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-# A customized version of ChatMessage, with fields for storing extra information.
 class ChatMessageEnriched(TypedDict):
+    """A customized version of ChatMessage, with fields for storing extra information."""
+
     role: Literal["system", "user", "assistant"]
 
     # This is the string that the user typed. (It may be run through the
@@ -83,6 +84,10 @@ class ChatMessageEnriched(TypedDict):
 # ================================================================================
 @module.ui
 def chat_ui() -> ui.Tag:
+    """
+    UI portion of chatstream Shiny module.
+    """
+
     return ui.div(
         {"class": "shiny-gpt-chat"},
         _chat_dependency(),
@@ -99,6 +104,59 @@ def chat_ui() -> ui.Tag:
 # implemented as a class, to help keep the code more organized.
 @module.server
 class chat_server:
+    """
+    Server portion of chatstream Shiny module.
+
+    Parameters
+    ----------
+    model
+        OpenAI model to use. Can be a string or a function that returns a string.
+    api_key
+        OpenAI API key to use (optional). Can be a string or a function that returns a
+        string, or `None`. If `None`, then it will use the `OPENAI_API_KEY` environment
+        variable for the key.
+    url
+        OpenAI API endpoint to use (optional). Can be a string or a function that
+        returns a string, or `None`. If `None`, then it will use the default OpenAI API
+        endpoint.
+    system_prompt
+        System prompt to use. Can be a string or a function that returns a string.
+    temperature
+        Temperature to use. Can be a float or a function that returns a float.
+    text_input_placeholder
+        Placeholder teext to use for the text input. Can be a string or a function that
+        returns a string, or `None` for no placeholder.
+    throttle
+        Throttle interval to use for incoming streaming messages. Can be a float or a
+        function that returns a float.
+    button_label
+        Label to use for the button. Can be a string or a function that returns a
+        string.
+    query_preprocessor
+        Function that takes a string and returns a string. This is run on the user's
+        query before it is sent to the OpenAI API. Note that is run only on the most
+        recent query; previous messages in the chat history are not run through this
+        function.
+    answer_preprocessor
+        Function that tags a string and returns a TagChild. This is run on the answer
+        from the AI assistant before it is displayed in the chat UI. Note that is run on
+        streaming data. As each piece of streaming data comes in, the entire accumulated
+        string is run through this function.
+    debug
+        Whether to print debugging infromation to the console.
+
+    Attributes
+    ----------
+    session_messages:
+        All of the user and assistant messages in the conversation.
+    hide_query_ui:
+        This can be set to True to hide the query UI.
+    streaming_chat_string_pieces:
+        This is the current streaming chat content from the AI assistant, in the form of
+        a tuple of strings, one string from each message. When not streaming, it is
+        empty.
+    """
+
     def __init__(
         self,
         input: Inputs,
@@ -121,47 +179,6 @@ class chat_server:
         | None = None,
         debug: bool = False,
     ):
-        """
-        Chat server shiny module.
-
-        Parameters
-        ----------
-        input
-            Shiny Session input object.
-        output
-            Shiny Session output object.
-        session
-            Shiny Session object.
-        model
-            OpenAI model to use. Can be a string or a function that returns a string.
-        api_key
-            OpenAI API key to use (optional). Can be a string or a function that returns
-            a string, or `None`. If `None`, then it will use the `OPENAI_API_KEY`
-            environment variable for the key.
-        url
-            OpenAI API endpoint to use (optional). Can be a string or a function that
-            returns a string, or `None`. If `None`, then it will use the default OpenAI
-            API endpoint.
-        system_prompt
-            System prompt to use. Can be a string or a function that returns a string.
-        temperature
-            Temperature to use. Can be a float or a function that returns a float.
-        text_input_placeholder
-            Placeholder teext to use for the text input. Can be a string or a function
-            that returns a string, or `None` for no placeholder.
-        throttle
-            Throttle to use. Can be a float or a function that returns a float.
-        button_label
-            Label to use for the button. Can be a string or a function that returns a
-            string.
-        query_preprocessor
-            Function that takes a string and returns a string. This is run on the user's
-            query before it is sent to the OpenAI API. Note that is run only on the most
-            recent query; previous messages in the chat history are not run through this
-            function.
-        debug
-            Whether to print debugging infromation to the console.
-        """
         self.input = input
         self.output = output
         self.session = session
@@ -204,19 +221,14 @@ class chat_server:
         self.streaming_chat_string_pieces: reactive.Value[
             tuple[str, ...]
         ] = reactive.Value(tuple())
-        """This is the current streaming chat content from the AI assistant, in the form
-        of a tuple of strings, one string from each message. When not streaming, it is
-        empty."""
 
         self._ask_trigger = reactive.Value(0)
 
         self.session_messages: reactive.Value[
             tuple[ChatMessageEnriched, ...]
         ] = reactive.Value(tuple())
-        "All of the user and assistant messages in the conversation."
 
         self.hide_query_ui: reactive.Value[bool] = reactive.Value(False)
-        "This can be set to True to hide the query UI."
 
         self.reset()
         self._init_reactives()
@@ -437,15 +449,16 @@ class chat_server:
             await reactive.flush()
 
         # Short delay before triggering ask_trigger.
-        safe_create_task(self.delayed_new_query_trigger(0.2))
+        safe_create_task(self._delayed_new_query_trigger(0.2))
 
-    async def delayed_new_query_trigger(self, delay: float) -> None:
+    async def _delayed_new_query_trigger(self, delay: float) -> None:
         await asyncio.sleep(delay)
         async with reactive.lock():
             self._ask_trigger.set(self._ask_trigger() + 1)
             await reactive.flush()
 
     def ask(self, query: str, delay: float = 1) -> None:
+        """Programmatically ask a question."""
         safe_create_task(self._delayed_set_query(query, delay))
 
 

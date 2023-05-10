@@ -1,0 +1,50 @@
+# chat_server { #chatstream.chat_server }
+
+`chat_server(self, input, output, session, *, model=DEFAULT_MODEL, api_key=None, url=None, system_prompt=DEFAULT_SYSTEM_PROMPT, temperature=DEFAULT_TEMPERATURE, text_input_placeholder=None, button_label='Ask', throttle=DEFAULT_THROTTLE, query_preprocessor=None, answer_preprocessor=None, debug=False)`
+
+Server portion of chatstream Shiny module.
+
+## Parameters
+
+| Name                     | Type                                                                                      | Description                                                                                                                                                                                                                                                                          | Default                 |
+|--------------------------|-------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------|
+| `model`                  | OpenAiModel \| Callable\[\[\], OpenAiModel\]                                              | OpenAI model to use. Can be a string or a function that returns a string.                                                                                                                                                                                                            | `DEFAULT_MODEL`         |
+| `api_key`                | str \| Callable\[\[\], str\] \| None                                                      | OpenAI API key to use (optional). Can be a string or a function that returns a string, or `None`. If `None`, then it will use the `OPENAI_API_KEY` environment variable for the key.                                                                                                 | `None`                  |
+| `url`                    | str \| Callable\[\[\], str\] \| None                                                      | OpenAI API endpoint to use (optional). Can be a string or a function that returns a string, or `None`. If `None`, then it will use the default OpenAI API endpoint.                                                                                                                  | `None`                  |
+| `system_prompt`          | str \| Callable\[\[\], str\]                                                              | System prompt to use. Can be a string or a function that returns a string.                                                                                                                                                                                                           | `DEFAULT_SYSTEM_PROMPT` |
+| `temperature`            | float \| Callable\[\[\], float\]                                                          | Temperature to use. Can be a float or a function that returns a float.                                                                                                                                                                                                               | `DEFAULT_TEMPERATURE`   |
+| `text_input_placeholder` | str \| Callable\[\[\], str\] \| None                                                      | Placeholder teext to use for the text input. Can be a string or a function that returns a string, or `None` for no placeholder.                                                                                                                                                      | `None`                  |
+| `throttle`               | float \| Callable\[\[\], float\]                                                          | Throttle interval to use for incoming streaming messages. Can be a float or a function that returns a float.                                                                                                                                                                         | `DEFAULT_THROTTLE`      |
+| `button_label`           | str \| Callable\[\[\], str\]                                                              | Label to use for the button. Can be a string or a function that returns a string.                                                                                                                                                                                                    | `'Ask'`                 |
+| `query_preprocessor`     | Callable\[\[str\], str\] \| Callable\[\[str\], Awaitable\[str\]\] \| None                 | Function that takes a string and returns a string. This is run on the user's query before it is sent to the OpenAI API. Note that is run only on the most recent query; previous messages in the chat history are not run through this function.                                     | `None`                  |
+| `answer_preprocessor`    | Callable\[\[str\], ui.TagChild\] \| Callable\[\[str\], Awaitable\[ui.TagChild\]\] \| None | Function that tags a string and returns a TagChild. This is run on the answer from the AI assistant before it is displayed in the chat UI. Note that is run on streaming data. As each piece of streaming data comes in, the entire accumulated string is run through this function. | `None`                  |
+| `debug`                  | bool                                                                                      | Whether to print debugging infromation to the console.                                                                                                                                                                                                                               | `False`                 |
+
+## Attributes
+
+| Name                         | Type                                                | Description                                                 |
+|------------------------------|-----------------------------------------------------|-------------------------------------------------------------|
+| session_messages             | reactive.Value\[tuple\[ChatMessageEnriched, ...\]\] | All of the user and assistant messages in the conversation. |
+| hide_query_ui                | reactive.Value\[bool\]                              | This can be set to True to hide the query UI.               |
+| streaming_chat_string_pieces | reactive.Value\[tuple\[str, ...\]\]                 | This is the current streaming chat content from the AI assistant, in the form of
+a tuple of strings, one string from each message. When not streaming, it is
+empty.                                                             |
+
+## Methods
+
+| Name | Description |
+| --- | --- |
+| [ask](#chatstream.chat_server.ask) | Programmatically ask a question. |
+| [reset](#chatstream.chat_server.reset) | Reset the state of this chat_server. Should not be called while streaming. |
+
+### ask { #chatstream.chat_server.ask }
+
+`chat_server.ask(self, query, delay=1)`
+
+Programmatically ask a question.
+
+### reset { #chatstream.chat_server.reset }
+
+`chat_server.reset(self)`
+
+Reset the state of this chat_server. Should not be called while streaming.
