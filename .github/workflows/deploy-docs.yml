@@ -27,7 +27,7 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          pip install --upgrade quartodoc
+          pip install --upgrade quartodoc@git+https://github.com/machow/quartodoc.git
           pip install -e .[dev]
 
       # =====================================================
