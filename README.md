@@ -10,13 +10,13 @@ It currently supports the OpenAI API. To use this, you must have an OpenAI API k
 
 The `chatstream` package is not on PyPI, but can be installed with pip:
 
-```
+```bash
 pip install chatstream@git+https://github.com/wch/chatstream.git
 ```
 
 Alternatively, if you'd like to develop a local copy of the package, first clone the repository and then install it with pip:
 
-```
+```bash
 cd chatstream
 pip install -e .[dev]
 ```
@@ -34,13 +34,13 @@ export OPENAI_API_KEY="<your_openai_api_key>"
 
 Then run:
 
-```
+```bash
 shiny run examples/basic/app.py --launch-browser
 ```
 
 Some examples (like `recipes`) have a `requirements.txt` file. For those examples, first install the requirements, then run the application as normal:
 
-```
+```bash
 pip install -r examples/recipes/requirements.txt
 shiny run examples/recipes/app.py --launch-browser
 ```
