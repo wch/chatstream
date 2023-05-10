@@ -46,6 +46,7 @@ shiny run examples/recipes/app.py --launch-browser
 ```
 
 
+
 ## FAQ
 
 * **Does this work with [Shinylive](https://shiny.rstudio.com/py/docs/shinylive.html)?** It almost does. The `openai` package has dependencies which do not install on [Pyodide](https://pyodide.org/), but chatstream currently has an `openai_pyodide` shim which uses the browser's `fetch` API. However, there is one more hurdle: the `tiktoken` package (which counts the number of tokens used by a piece of text) needs to be built to run on Pyodide.
