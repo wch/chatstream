@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://wch.github.io/shiny-openai-chat/index.html</loc>
-    <lastmod>2023-05-10T21:30:01.448Z</lastmod>
+    <loc>https://wch.github.io/chatstream/index.html</loc>
+    <lastmod>2023-05-10T21:32:49.868Z</lastmod>
   </url>
   <url>
-    <loc>https://wch.github.io/shiny-openai-chat/reference/chat_server.html</loc>
-    <lastmod>2023-05-10T21:30:02.061Z</lastmod>
+    <loc>https://wch.github.io/chatstream/reference/chat_server.html</loc>
+    <lastmod>2023-05-10T21:32:50.549Z</lastmod>
   </url>
   <url>
-    <loc>https://wch.github.io/shiny-openai-chat/reference/index.html</loc>
-    <lastmod>2023-05-10T21:30:02.596Z</lastmod>
+    <loc>https://wch.github.io/chatstream/reference/index.html</loc>
+    <lastmod>2023-05-10T21:32:51.105Z</lastmod>
   </url>
   <url>
-    <loc>https://wch.github.io/shiny-openai-chat/reference/chat_ui.html</loc>
-    <lastmod>2023-05-10T21:30:03.113Z</lastmod>
+    <loc>https://wch.github.io/chatstream/reference/chat_ui.html</loc>
+    <lastmod>2023-05-10T21:32:51.640Z</lastmod>
   </url>
 </urlset>

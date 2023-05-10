@@ -1,1 +1,1 @@
-Sitemap: https://wch.github.io/shiny-openai-chat/sitemap.xml
+Sitemap: https://wch.github.io/chatstream/sitemap.xml
