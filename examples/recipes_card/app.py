@@ -56,6 +56,9 @@ def server(input: Inputs, output: Outputs, session: Session):
 
     @reactive.Calc
     def finished_streaming():
+        """
+        Returns True if the streaming messages has finished; False otherwise.
+        """
         session_messages = chat_module.session_messages()
         if len(session_messages) >= 1 and session_messages[-1]["role"] == "assistant":
             chat_module.hide_query_ui.set(True)
@@ -66,6 +69,9 @@ def server(input: Inputs, output: Outputs, session: Session):
     @output
     @render.ui
     def add_button_ui():
+        """
+        UI for the "Start Over" and "Add Recipe" buttons when streaming has finished.
+        """
         if finished_streaming():
             return ui.div(
                 {"class": "float-end"},
@@ -81,7 +87,28 @@ def server(input: Inputs, output: Outputs, session: Session):
     @reactive.Effect
     @reactive.event(input.add_recipe)
     def add_recipe():
-        print("Add recipe here!")
+        """
+        Adds the recipe to the database.
+        """
+        # Note: This is where you can implement adding recipe to a database. For this
+        # example, we'll just extract the last message and print it to the console.
+        last_message = chat_module.session_messages()[-1]
+        text = last_message["content"]
+        text = re.sub(r"^```.*", "", text, flags=re.MULTILINE)
+        recipe: Recipe | None = None
+        try:
+            recipe = yaml.safe_load(text)
+        except yaml.YAMLError:
+            pass
+
+        print(recipe)
+
+        m = ui.modal(
+            ui.h3("Recipe added!"),
+            easy_close=True,
+            footer=None,
+        )
+        ui.modal_show(m)
 
     @reactive.Effect
     @reactive.event(input.start_over)
@@ -107,12 +134,22 @@ async def scrape_page_with_url(url: str) -> str:
 
 
 def answer_to_recipe_card(answer: str) -> ui.TagChild:
+    """
+    Given an answer, which is a recipe in YAML format, returns a recipe card, which is
+    a Shiny UI element (which is essentially HTML).
+
+    This function can handle the answer in its partial forms as it streams in.
+    """
+
     txt = re.sub(r"^```.*", "", answer, flags=re.MULTILINE)
 
     recipe: Recipe | None = None
     try:
         recipe = yaml.safe_load(txt)
     except yaml.YAMLError:
+        # If unable to parse the YAML, do a req(False, cancel_output=True), which theows
+        # a SilentException; if an output function raises this exception, Shiny will
+        # leave the output unchanged from its previous state.
         shiny.req(False, cancel_output=True)
 
     if recipe is None:
