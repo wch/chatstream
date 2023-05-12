@@ -3,7 +3,9 @@ chatstream for Shiny for Python
 
 The chatstream package provides a [Shiny for Python](https://shiny.rstudio.com/py/) module for building AI chat applications. Please keep in mind that this is very much a work in progress, and the API is likely to change.
 
-It currently supports the OpenAI API. To use this, you must have an OpenAI API key. You can get one from the [OpenAI](https://platform.openai.com/account/api-keys) or from [Azure's OpenAI Service](https://azure.microsoft.com/en-us/products/cognitive-services/openai-service). (Note that if you have use Azure, you will need to point the applications to the Azure endpoint instead of the default OpenAI endpoint.)
+See [this post](https://shiny.posit.co/blog/posts/shiny-python-chatstream/) on the Shiny blog to see some examples in action!
+
+Chatstream currently supports the OpenAI API. To use this, you must have an OpenAI API key. You can get one from the [OpenAI](https://platform.openai.com/account/api-keys) or from [Azure's OpenAI Service](https://azure.microsoft.com/en-us/products/cognitive-services/openai-service). (Note that if you have use Azure, you will need to point the applications to the Azure endpoint instead of the default OpenAI endpoint.)
 
 
 ## Installation
