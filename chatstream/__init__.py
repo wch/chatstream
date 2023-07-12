@@ -177,6 +177,7 @@ class chat_server:
         answer_preprocessor: Callable[[str], ui.TagChild]
         | Callable[[str], Awaitable[ui.TagChild]]
         | None = None,
+        endpoint_type: Literal["openai", "azure"] = "openai",
         debug: bool = False,
     ):
         self.input = input
@@ -209,6 +210,8 @@ class chat_server:
             # This lambda wrapper is needed to make pyright happy
             answer_preprocessor = lambda x: ui.markdown(x)
         self.answer_preprocessor = wrap_async(answer_preprocessor)
+
+        self.endpoint_type = endpoint_type
 
         self.print_request = debug
 
@@ -338,13 +341,18 @@ class chat_server:
             if self.url() is not None:
                 extra_kwargs["url"] = self.url()
 
+            # Azure uses deployment_name instead of model.
+            if self.endpoint_type == "openai":
+                extra_kwargs["model"] = self.model()
+            elif self.endpoint_type == "azure":
+                extra_kwargs["deployment_name"] = self.model()
+
             # Launch a Task that updates the chat string asynchronously. We run this in
             # a separate task so that the data can come in without need to await it in
             # this Task (which would block other computation to happen, like running
             # reactive stuff).
             messages: StreamResult[ChatCompletionStreaming] = stream_to_reactive(
                 openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
-                    model=self.model(),
                     api_key=self.api_key(),
                     messages=outgoing_messages_normalized,
                     stream=True,
