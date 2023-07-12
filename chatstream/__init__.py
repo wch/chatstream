@@ -35,10 +35,12 @@ from htmltools import HTMLDependency
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
 
 from .openai_types import (
+    AzureOpenAiModel,
     ChatCompletionStreaming,
     ChatMessage,
     OpenAiModel,
     openai_model_context_limits,
+    openai_model_name,
 )
 
 if "pyodide" in sys.modules:
@@ -142,6 +144,10 @@ class chat_server:
         from the AI assistant before it is displayed in the chat UI. Note that is run on
         streaming data. As each piece of streaming data comes in, the entire accumulated
         string is run through this function.
+    endpoint_type
+        Either "openai" or "azure", for OpenAI and Azure-OpenAI endpoints, respectively.
+        Azure uses then OpenAI API, but with some slight changes, and so if you are
+        using Azure, you must set this to "azure".
     debug
         Whether to print debugging infromation to the console.
 
@@ -163,7 +169,9 @@ class chat_server:
         output: Outputs,
         session: Session,
         *,
-        model: OpenAiModel | Callable[[], OpenAiModel] = DEFAULT_MODEL,
+        model: OpenAiModel
+        | AzureOpenAiModel
+        | Callable[[], OpenAiModel | AzureOpenAiModel] = DEFAULT_MODEL,
         api_key: str | Callable[[], str] | None = None,
         url: str | Callable[[], str] | None = None,
         system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
@@ -187,7 +195,7 @@ class chat_server:
         # Ensure these are functions, even if we were passed static values.
         self.model = cast(
             # pyright needs a little help with this.
-            Callable[[], OpenAiModel],
+            Callable[[], OpenAiModel | AzureOpenAiModel],
             wrap_function_nonreactive(model),
         )
         if api_key is None:
@@ -318,7 +326,7 @@ class chat_server:
             # Count tokens, going backward.
             outgoing_messages: list[ChatMessageEnriched] = []
             tokens_total = self._system_prompt_message()["token_count"]
-            max_tokens = openai_model_context_limits[self.model()]
+            max_tokens = openai_model_context_limits[openai_model_name(self.model())]
             for message in reversed(session_messages2):
                 if tokens_total + message["token_count"] > max_tokens:
                     break
@@ -487,7 +495,8 @@ def get_env_var_api_key() -> str:
     return key
 
 
-def get_token_count(s: str, model: OpenAiModel) -> int:
+def get_token_count(s: str, model: OpenAiModel | AzureOpenAiModel) -> int:
+    model = openai_model_name(model)
     encoding = tiktoken.encoding_for_model(model)
     return len(encoding.encode(s))
 
