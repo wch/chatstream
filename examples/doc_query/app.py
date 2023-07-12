@@ -48,7 +48,11 @@ app_ui = x.ui.page_fillable(
             ui.h4("Shiny Document Query"),
             ui.hr(),
             ui.input_file("file", "Drag to upload text or PDF files", multiple=True),
-            ui.input_select("model", "Model", choices=["gpt-3.5-turbo", "gpt-4"]),
+            ui.input_select(
+                "model",
+                "Model",
+                choices=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4"],
+            ),
             ui.hr(),
             ui.output_ui("uploaded_filenames_ui"),
             ui.hr(),
