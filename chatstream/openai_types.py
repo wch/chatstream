@@ -15,23 +15,6 @@ OpenAiModel = Literal[
     "gpt-4-32k-0314",
 ]
 
-# Azure has different names for models:
-# https://learn.microsoft.com/en-us/azure/cognitive-services/openai/concepts/models
-AzureOpenAiModel = Literal[
-    "gpt-35-turbo",
-    "gpt-35-turbo-16k",
-    "gpt-4",
-    "gpt-4-32k",
-]
-
-# Mapping from Azure OpenAI model names to OpenAi model names
-azure_openai_model_mapping: dict[AzureOpenAiModel, OpenAiModel] = {
-    "gpt-35-turbo": "gpt-3.5-turbo",
-    "gpt-35-turbo-16k": "gpt-3.5-turbo-16k",
-    "gpt-4": "gpt-4",
-    "gpt-4-32k": "gpt-4-32k",
-}
-
 
 openai_model_context_limits: dict[OpenAiModel, int] = {
     "gpt-3.5-turbo": 4096,
@@ -92,21 +75,3 @@ class ChatCompletionNonStreaming(TypedDict):
 class ChatCompletionStreaming(ChatCompletionBase):
     object: Literal["chat.completion.chunk"]
     choices: list[ChoiceStreaming]
-
-
-def openai_model_name(model: OpenAiModel | AzureOpenAiModel) -> OpenAiModel:
-    """Given an OpenAI or Azure OpenAI model name, return the OpenAI model name.
-
-    OpenAI and Azure OpenAI have different names for the same models. This function
-    converts from Azure OpenAI model names to OpenAI model names.
-
-    Args:
-        model: An OpenAI or Azure OpenAI model name.
-
-    Returns:
-        : An OpenAI model name
-    """
-    if model in azure_openai_model_mapping:
-        return azure_openai_model_mapping[model]
-    else:
-        return model  # pyright: ignore[reportGeneralTypeIssues]

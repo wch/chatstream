@@ -35,12 +35,10 @@ from htmltools import HTMLDependency
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
 
 from .openai_types import (
-    AzureOpenAiModel,
     ChatCompletionStreaming,
     ChatMessage,
     OpenAiModel,
     openai_model_context_limits,
-    openai_model_name,
 )
 
 if "pyodide" in sys.modules:
@@ -113,6 +111,10 @@ class chat_server:
     ----------
     model
         OpenAI model to use. Can be a string or a function that returns a string.
+    azure_deployment_id
+        Azure deployment ID to use (optional). Azure supports the OpenAI API, but with
+        some slight changes. If you are using Azure, you must set this to the your
+        deployment ID. Can be a string or a function that return a string.
     api_key
         OpenAI API key to use (optional). Can be a string or a function that returns a
         string, or `None`. If `None`, then it will use the `OPENAI_API_KEY` environment
@@ -126,7 +128,7 @@ class chat_server:
     temperature
         Temperature to use. Can be a float or a function that returns a float.
     text_input_placeholder
-        Placeholder teext to use for the text input. Can be a string or a function that
+        Placeholder text to use for the text input. Can be a string or a function that
         returns a string, or `None` for no placeholder.
     throttle
         Throttle interval to use for incoming streaming messages. Can be a float or a
@@ -144,10 +146,6 @@ class chat_server:
         from the AI assistant before it is displayed in the chat UI. Note that is run on
         streaming data. As each piece of streaming data comes in, the entire accumulated
         string is run through this function.
-    endpoint_type
-        Either "openai" or "azure", for OpenAI and Azure-OpenAI endpoints, respectively.
-        Azure uses then OpenAI API, but with some slight changes, and so if you are
-        using Azure, you must set this to "azure".
     debug
         Whether to print debugging infromation to the console.
 
@@ -169,9 +167,8 @@ class chat_server:
         output: Outputs,
         session: Session,
         *,
-        model: OpenAiModel
-        | AzureOpenAiModel
-        | Callable[[], OpenAiModel | AzureOpenAiModel] = DEFAULT_MODEL,
+        model: OpenAiModel | Callable[[], OpenAiModel] = DEFAULT_MODEL,
+        azure_deployment_id: str | Callable[[], str] | None = None,
         api_key: str | Callable[[], str] | None = None,
         url: str | Callable[[], str] | None = None,
         system_prompt: str | Callable[[], str] = DEFAULT_SYSTEM_PROMPT,
@@ -185,7 +182,6 @@ class chat_server:
         answer_preprocessor: Callable[[str], ui.TagChild]
         | Callable[[str], Awaitable[ui.TagChild]]
         | None = None,
-        endpoint_type: Literal["openai", "azure"] = "openai",
         debug: bool = False,
     ):
         self.input = input
@@ -195,9 +191,15 @@ class chat_server:
         # Ensure these are functions, even if we were passed static values.
         self.model = cast(
             # pyright needs a little help with this.
-            Callable[[], OpenAiModel | AzureOpenAiModel],
+            Callable[[], OpenAiModel],
             wrap_function_nonreactive(model),
         )
+
+        if azure_deployment_id is None:
+            self.azure_deployment_id = None
+        else:
+            self.azure_deployment_id = wrap_function_nonreactive(azure_deployment_id)
+
         if api_key is None:
             self.api_key = get_env_var_api_key
         else:
@@ -218,8 +220,6 @@ class chat_server:
             # This lambda wrapper is needed to make pyright happy
             answer_preprocessor = lambda x: ui.markdown(x)
         self.answer_preprocessor = wrap_async(answer_preprocessor)
-
-        self.endpoint_type = endpoint_type
 
         self.print_request = debug
 
@@ -326,7 +326,7 @@ class chat_server:
             # Count tokens, going backward.
             outgoing_messages: list[ChatMessageEnriched] = []
             tokens_total = self._system_prompt_message()["token_count"]
-            max_tokens = openai_model_context_limits[openai_model_name(self.model())]
+            max_tokens = openai_model_context_limits[self.model()]
             for message in reversed(session_messages2):
                 if tokens_total + message["token_count"] > max_tokens:
                     break
@@ -349,11 +349,12 @@ class chat_server:
             if self.url() is not None:
                 extra_kwargs["url"] = self.url()
 
-            # Azure uses deployment_name instead of model.
-            if self.endpoint_type == "openai":
+            if self.azure_deployment_id is not None:
+                # Azure-OpenAI uses deployment_id instead of model.
+                extra_kwargs["deployment_id"] = self.azure_deployment_id()
+            else:
+                # OpenAI just uses model.
                 extra_kwargs["model"] = self.model()
-            elif self.endpoint_type == "azure":
-                extra_kwargs["deployment_name"] = self.model()
 
             # Launch a Task that updates the chat string asynchronously. We run this in
             # a separate task so that the data can come in without need to await it in
@@ -495,8 +496,7 @@ def get_env_var_api_key() -> str:
     return key
 
 
-def get_token_count(s: str, model: OpenAiModel | AzureOpenAiModel) -> int:
-    model = openai_model_name(model)
+def get_token_count(s: str, model: OpenAiModel) -> int:
     encoding = tiktoken.encoding_for_model(model)
     return len(encoding.encode(s))
 
