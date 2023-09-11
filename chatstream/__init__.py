@@ -89,7 +89,7 @@ def chat_ui() -> ui.Tag:
     """
 
     return ui.div(
-        {"class": "shiny-gpt-chat"},
+        {"class": "shiny-gpt-chat", "style": "margin-top: 10px;"},
         _chat_dependency(),
         ui.output_ui("session_messages_ui"),
         ui.output_ui("current_streaming_message_ui"),
