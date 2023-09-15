@@ -7,6 +7,7 @@ import shiny
 import shiny.experimental as x
 import webscraper
 import yaml
+from htmltools import css
 from shiny import App, Inputs, Outputs, Session, reactive, render, ui
 
 import chatstream
@@ -259,16 +260,12 @@ def recipe_card(recipe: Recipe) -> ui.TagChild:
         title,
         tags,
         summary,
-        ui.div(
-            {"class": "row align-items-start"},
-            ui.div(
-                {"class": "col-5"},
-                ingredients,
-            ),
-            ui.div(
-                {"class": "col-7"},
-                directions,
-            ),
+        x.ui.layout_column_wrap(
+            None,
+            ui.div(ingredients),
+            ui.div(directions),
+            fill=False,
+            style=css(grid_template_columns="5fr 7fr"),
         ),
         source,
     )
