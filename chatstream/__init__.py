@@ -632,7 +632,7 @@ def wrap_function_nonreactive(x: T | Callable[[], T]) -> Callable[[], T]:
 def _chat_dependency():
     return HTMLDependency(
         "shiny-gpt-chat",
-        "0.0.0",
+        __version__,
         source={"package": "chatstream", "subdir": "assets"},
         script={"src": "chat.js"},
         stylesheet={"href": "chat.css"},
