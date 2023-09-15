@@ -124,7 +124,7 @@ class chat_server:
     temperature
         Temperature to use. Can be a float or a function that returns a float.
     text_input_placeholder
-        Placeholder teext to use for the text input. Can be a string or a function that
+        Placeholder text to use for the text input. Can be a string or a function that
         returns a string, or `None` for no placeholder.
     throttle
         Throttle interval to use for incoming streaming messages. Can be a float or a
