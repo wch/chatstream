@@ -56,7 +56,8 @@ app_ui = x.ui.page_fillable(
             ui.input_select(
                 "model",
                 "Model",
-                choices=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4"],
+                choices=["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4", "gpt-4-32k"],
+                selected="gpt-3.5-turbo-16k",
             ),
             ui.hr(),
             ui.output_ui("uploaded_filenames_ui"),
