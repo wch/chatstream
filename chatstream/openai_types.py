@@ -47,7 +47,7 @@ class ChoiceDelta(TypedDict):
 
 
 class ChoiceBase(TypedDict):
-    finish_reason: Literal["stop"] | None
+    finish_reason: Literal["stop", "length"] | None
     index: int
 
 

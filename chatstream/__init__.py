@@ -57,6 +57,10 @@ DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_THROTTLE = 0.1
 
+# Make sure that the query text leaves at least this many tokens for the response. For
+# example, if the model has a 4096 token limit, then the longest query will be 4096
+# minus this number.
+N_RESERVE_RESPONSE_TOKENS = 400
 
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -257,9 +261,13 @@ class chat_server:
                         + (message["choices"][0]["delta"]["content"],)
                     )
 
-                if message["choices"][0]["finish_reason"] == "stop":
+                finish_reason = message["choices"][0]["finish_reason"]
+                if finish_reason in ["stop", "length"]:
                     # If we got here, we know that streaming_chat_string is not None.
                     current_message_str = "".join(self.streaming_chat_string_pieces())
+
+                    if finish_reason == "length":
+                        current_message_str += " [Reached token limit; Type 'continue' to continue answer.]"
 
                     # Update session_messages. We need to make a copy to trigger a
                     # reactive invalidation.
@@ -315,7 +323,9 @@ class chat_server:
             # Count tokens, going backward.
             outgoing_messages: list[ChatMessageEnriched] = []
             tokens_total = self._system_prompt_message()["token_count"]
-            max_tokens = openai_model_context_limits[self.model()]
+            max_tokens = (
+                openai_model_context_limits[self.model()] - N_RESERVE_RESPONSE_TOKENS
+            )
             for message in reversed(session_messages2):
                 if tokens_total + message["token_count"] > max_tokens:
                     break
@@ -537,6 +547,8 @@ def stream_to_reactive(
         message_batch: list[T] = []
 
         async for message in func:
+            # This print will display every message coming from the server.
+            # print(json.dumps(message, indent=2))
             message_batch.append(message)
 
             if time.time() - last_message_time > throttle:

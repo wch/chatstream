@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 from datetime import datetime
 from pathlib import Path
@@ -19,10 +20,14 @@ from shiny.types import FileInfo
 import chatstream
 from chatstream import openai_types
 
-# Maximum number of context chunks to send to the API.
-N_DOCUMENTS = 16
-# Maximum number of tokens in the context chunks to send to the API.
-CONTEXT_TOKEN_LIMIT = 3200
+# TODO: Make this a slider Number of tokens to reserve for the question. This app will
+# use up to (N minus this number) of tokens for the context that it sends to the API.
+N_RESERVE_QUERY_TOKENS = 200
+
+# Approximate average size of a document in the database. This is used to determine how
+# many documents to fetch from the database.
+APPROX_DOCUMENT_SIZE = 200
+
 # Print debugging info to the console
 DEBUG = True
 
@@ -98,9 +103,19 @@ def server(input: Inputs, output: Outputs, session: Session):
     uploaded_filenames = reactive.Value[tuple[str, ...]](tuple())
 
     def add_context_to_query(query: str) -> str:
+        max_context_tokens = (
+            openai_types.openai_model_context_limits[input.model()]
+            - N_RESERVE_QUERY_TOKENS
+        )
+
+        # Number of documents to fetch from the database. Assume that each document is
+        # 200 tokens. If we fetch more content than will fit in the context, it's OK
+        # because the extra stuff just won't be used.
+        n_documents = math.ceil(max_context_tokens / APPROX_DOCUMENT_SIZE)
+
         results = collection.query(
             query_texts=[query],
-            n_results=min(collection.count(), N_DOCUMENTS),
+            n_results=min(collection.count(), n_documents),
         )
 
         if results["documents"] is None:
@@ -108,9 +123,10 @@ def server(input: Inputs, output: Outputs, session: Session):
         else:
             token_count = 0
             context = ""
+
             for doc in results["documents"][0]:
                 result_token_count = get_token_count(doc, input.model())
-                if token_count + result_token_count >= CONTEXT_TOKEN_LIMIT:
+                if token_count + result_token_count >= max_context_tokens:
                     break
 
                 token_count += result_token_count
