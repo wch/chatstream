@@ -65,13 +65,12 @@ app_ui = x.ui.page_fillable(
             ),
             position="right",
         ),
-        ui.row(
-            ui.div(
-                {"class": "col-sm-6"},
+        x.ui.layout_column_wrap(
+            1 / 2,
+            x.ui.card(
                 chatstream.chat_ui("chat1"),
             ),
-            ui.div(
-                {"class": "col-sm-6"},
+            x.ui.card(
                 chatstream.chat_ui("chat2"),
             ),
         ),
