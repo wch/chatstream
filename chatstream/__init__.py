@@ -44,7 +44,9 @@ from .openai_types import (
 if "pyodide" in sys.modules:
     from . import openai_pyodide as openai
 else:
-    import openai
+    from openai import AsyncOpenAI
+
+    aclient = AsyncOpenAI()
 
 if sys.version_info < (3, 10):
     from typing_extensions import ParamSpec, TypeGuard
@@ -353,14 +355,12 @@ class chat_server:
             # this Task (which would block other computation to happen, like running
             # reactive stuff).
             messages: StreamResult[ChatCompletionStreaming] = stream_to_reactive(
-                openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
-                    model=self.model(),
-                    api_key=self.api_key(),
-                    messages=outgoing_messages_normalized,
-                    stream=True,
-                    temperature=self.temperature(),
-                    **extra_kwargs,
-                ),
+                aclient.chat.completions.create(model=self.model(),
+                api_key=self.api_key(),
+                messages=outgoing_messages_normalized,
+                stream=True,
+                temperature=self.temperature(),
+                **extra_kwargs),
                 throttle=self.throttle(),
             )
 
