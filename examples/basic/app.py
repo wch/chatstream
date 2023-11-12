@@ -8,7 +8,7 @@ app_ui = ui.page_fixed(
 
 
 def server(input: Inputs, output: Outputs, session: Session):
-    chatstream.chat_server("mychat")
+    chatstream.chat_server("mychat", debug=True)
 
 
 app = App(app_ui, server)
