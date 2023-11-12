@@ -3,4 +3,4 @@ pypdf
 langchain
 tiktoken
 shiny
-chatstream@git+https://github.com/wch/chatstream.git
+chatstream@git+https://github.com/dar4datascience/chatstream.git

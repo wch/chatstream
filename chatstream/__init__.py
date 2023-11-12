@@ -29,7 +29,6 @@ from typing import (
     cast,
 )
 
-import shiny.experimental as x
 import tiktoken
 from htmltools import HTMLDependency
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
@@ -44,7 +43,9 @@ from .openai_types import (
 if "pyodide" in sys.modules:
     from . import openai_pyodide as openai
 else:
-    import openai
+    from openai import AsyncOpenAI
+
+
 
 if sys.version_info < (3, 10):
     from typing_extensions import ParamSpec, TypeGuard
@@ -255,16 +256,18 @@ class chat_server:
             current_batch = self.streaming_chat_messages_batch()
 
             for message in current_batch:
-                if "content" in message["choices"][0]["delta"]:
+                if message.choices[0].delta.content is not None:
                     self.streaming_chat_string_pieces.set(
-                        self.streaming_chat_string_pieces()
-                        + (message["choices"][0]["delta"]["content"],)
+                        (self.streaming_chat_string_pieces())
+                        + (message.choices[0].delta.content,) # convert string to tuple thanks to comma
                     )
 
-                finish_reason = message["choices"][0]["finish_reason"]
+                finish_reason = message.choices[0].finish_reason
+
                 if finish_reason in ["stop", "length"]:
                     # If we got here, we know that streaming_chat_string is not None.
                     current_message_str = "".join(self.streaming_chat_string_pieces())
+
 
                     if finish_reason == "length":
                         current_message_str += " [Reached token limit; Type 'continue' to continue answer.]"
@@ -352,16 +355,16 @@ class chat_server:
             # a separate task so that the data can come in without need to await it in
             # this Task (which would block other computation to happen, like running
             # reactive stuff).
+            aclient = AsyncOpenAI(api_key=self.api_key())
+
             messages: StreamResult[ChatCompletionStreaming] = stream_to_reactive(
-                openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
-                    model=self.model(),
-                    api_key=self.api_key(),
-                    messages=outgoing_messages_normalized,
-                    stream=True,
-                    temperature=self.temperature(),
-                    **extra_kwargs,
-                ),
-                throttle=self.throttle(),
+                aclient.chat.completions.create(model=self.model(),
+                messages=outgoing_messages_normalized,
+                stream=True,
+                temperature=self.temperature(),
+                **extra_kwargs,
+                              max_tokens=100),
+                throttle=self.throttle()
             )
 
             # Set this to a non-empty tuple (with a blank string), to indicate that
@@ -418,7 +421,7 @@ class chat_server:
                 return ui.div()
 
             return ui.div(
-                x.ui.input_text_area(
+                ui.input_text_area(
                     "query",
                     None,
                     # value="2+2",

@@ -166,7 +166,7 @@ def answer_to_recipe_card(answer: str) -> ui.TagChild:
 def recipe_card(recipe: Recipe) -> ui.TagChild:
     title = None
     if "title" in recipe:
-        title = x.ui.card_header(
+        title = ui.card_header(
             {"class": "bg-dark fw-bold fs-3"},
             recipe["title"],
         )
@@ -256,11 +256,11 @@ def recipe_card(recipe: Recipe) -> ui.TagChild:
             ui.a({"href": recipe["source"], "target": "_blank"}, recipe["source"]),
         )
 
-    return x.ui.card(
+    return ui.card(
         title,
         tags,
         summary,
-        x.ui.layout_column_wrap(
+        ui.layout_column_wrap(
             None,
             ui.div(ingredients),
             ui.div(directions),
