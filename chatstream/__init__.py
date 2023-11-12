@@ -263,7 +263,7 @@ class chat_server:
                         + (message.choices[0].delta.content,)
                     )
 
-                finish_reason = message["choices"][0]["finish_reason"]
+                finish_reason = message.choices[0].finish_reason
                 if finish_reason in ["stop", "length"]:
                     # If we got here, we know that streaming_chat_string is not None.
                     current_message_str = "".join(self.streaming_chat_string_pieces())
@@ -363,6 +363,7 @@ class chat_server:
                 temperature=self.temperature(),
                 **extra_kwargs),
                 throttle=self.throttle(),
+                max_tokens=100
             )
 
             # Set this to a non-empty tuple (with a blank string), to indicate that
