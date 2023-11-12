@@ -378,13 +378,13 @@ class chat_server:
         def session_messages_ui():
             messages_html: list[ui.Tag] = []
             for message in self.session_messages():
-                if message.role == "system":
+                if message["role"] == "system":
                     # Don't show system messages.
                     continue
 
                 messages_html.append(
                     ui.div(
-                        {"class": message.role + "-message"},
+                        {"class": message["role"] + "-message"},
                         message["content_html"],
                     )
                 )
