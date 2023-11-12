@@ -256,16 +256,18 @@ class chat_server:
             current_batch = self.streaming_chat_messages_batch()
 
             for message in current_batch:
-                if "content" in message.choices[0].delta:
+                if message.choices[0].delta.content is not None:
                     self.streaming_chat_string_pieces.set(
                         self.streaming_chat_string_pieces()
                         + (message.choices[0].delta.content)
                     )
 
                 finish_reason = message.choices[0].finish_reason
+                print(self.streaming_chat_string_pieces())
                 if finish_reason in ["stop", "length"]:
                     # If we got here, we know that streaming_chat_string is not None.
                     current_message_str = "".join(self.streaming_chat_string_pieces())
+                    print(current_message_str)
 
                     if finish_reason == "length":
                         current_message_str += " [Reached token limit; Type 'continue' to continue answer.]"
