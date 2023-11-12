@@ -1,9 +1,6 @@
 chatstream for Shiny for Python
 ===============================
 
-TEST:
-  - OBSERVE RETURNED CHAT OBJECT FROM OPEN TO REWRITE CHATSTREAM ACCCESS TO IT
-
 The chatstream package provides a [Shiny for Python](https://shiny.rstudio.com/py/) module for building AI chat applications. Please keep in mind that this is very much a work in progress, and the API is likely to change.
 
 See [this post](https://shiny.posit.co/blog/posts/shiny-python-chatstream/) on the Shiny blog to see some examples in action!
