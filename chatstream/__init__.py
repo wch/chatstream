@@ -257,10 +257,10 @@ class chat_server:
             current_batch = self.streaming_chat_messages_batch()
 
             for message in current_batch:
-                if "content" in message["choices"][0]["delta"]:
+                if "content" in message.choices[0].delta:
                     self.streaming_chat_string_pieces.set(
                         self.streaming_chat_string_pieces()
-                        + (message["choices"][0]["delta"]["content"],)
+                        + (message.choices[0].delta.content,)
                     )
 
                 finish_reason = message["choices"][0]["finish_reason"]
