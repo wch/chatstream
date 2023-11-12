@@ -259,7 +259,7 @@ class chat_server:
                 if "content" in message.choices[0].delta:
                     self.streaming_chat_string_pieces.set(
                         self.streaming_chat_string_pieces()
-                        + (message.choices[0].delta.content,)
+                        + (message.choices[0].delta.content)
                     )
 
                 finish_reason = message.choices[0].finish_reason
@@ -360,9 +360,9 @@ class chat_server:
                 messages=outgoing_messages_normalized,
                 stream=True,
                 temperature=self.temperature(),
-                **extra_kwargs),
-                throttle=self.throttle(),
-                max_tokens=100
+                **extra_kwargs,
+                              max_tokens=100),
+                throttle=self.throttle()
             )
 
             # Set this to a non-empty tuple (with a blank string), to indicate that
@@ -378,13 +378,13 @@ class chat_server:
         def session_messages_ui():
             messages_html: list[ui.Tag] = []
             for message in self.session_messages():
-                if message["role"] == "system":
+                if message.role == "system":
                     # Don't show system messages.
                     continue
 
                 messages_html.append(
                     ui.div(
-                        {"class": message["role"] + "-message"},
+                        {"class": message.role + "-message"},
                         message["content_html"],
                     )
                 )
