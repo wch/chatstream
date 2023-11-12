@@ -46,7 +46,7 @@ if "pyodide" in sys.modules:
 else:
     from openai import AsyncOpenAI
 
-    aclient = AsyncOpenAI()
+
 
 if sys.version_info < (3, 10):
     from typing_extensions import ParamSpec, TypeGuard
@@ -354,9 +354,10 @@ class chat_server:
             # a separate task so that the data can come in without need to await it in
             # this Task (which would block other computation to happen, like running
             # reactive stuff).
+            aclient = AsyncOpenAI(api_key=self.api_key())
+
             messages: StreamResult[ChatCompletionStreaming] = stream_to_reactive(
                 aclient.chat.completions.create(model=self.model(),
-                api_key=self.api_key(),
                 messages=outgoing_messages_normalized,
                 stream=True,
                 temperature=self.temperature(),
