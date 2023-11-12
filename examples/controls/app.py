@@ -20,10 +20,10 @@ var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
 });
 """
 
-app_ui = x.ui.page_fillable(
+app_ui = ui.page_fillable(
     ui.head_content(ui.tags.title("Shiny ChatGPT")),
-    x.ui.layout_sidebar(
-        x.ui.sidebar(
+    ui.layout_sidebar(
+        ui.sidebar(
             ui.h4("Shiny ChatGPT"),
             ui.hr(),
             ui.input_select(

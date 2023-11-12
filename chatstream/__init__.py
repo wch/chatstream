@@ -29,7 +29,6 @@ from typing import (
     cast,
 )
 
-import shiny.experimental as x
 import tiktoken
 from htmltools import HTMLDependency
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
@@ -420,7 +419,7 @@ class chat_server:
                 return ui.div()
 
             return ui.div(
-                x.ui.input_text_area(
+                ui.input_text_area(
                     "query",
                     None,
                     # value="2+2",
