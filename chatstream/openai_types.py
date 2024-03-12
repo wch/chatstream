@@ -31,7 +31,7 @@ openai_model_context_limits: dict[OpenAiModel, int] = {
 openai_models: list[OpenAiModel] = list(openai_model_context_limits)
 
 
-class Usage(TypedDict):
+class Usage:
     completion_tokens: int  # Note: this doesn't seem to be present in all cases.
     prompt_tokens: int
     total_tokens: int
@@ -42,11 +42,11 @@ class ChatMessage(TypedDict):
     role: Literal["system", "user", "assistant"]
 
 
-class ChoiceDelta(TypedDict):
+class ChoiceDelta:
     content: str
 
 
-class ChoiceBase(TypedDict):
+class ChoiceBase:
     finish_reason: Literal["stop", "length"] | None
     index: int
 
@@ -59,13 +59,13 @@ class ChoiceStreaming(ChoiceBase):
     delta: ChoiceDelta
 
 
-class ChatCompletionBase(TypedDict):
+class ChatCompletionBase:
     id: str
     created: int
     model: str
 
 
-class ChatCompletionNonStreaming(TypedDict):
+class ChatCompletionNonStreaming:
     object: Literal["chat.completion"]
     choices: list[ChoiceNonStreaming]
     usage: Usage

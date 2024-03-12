@@ -1,5 +1,5 @@
 {
-  "ignore": ["venv", "typings"],
+  "ignore": ["venv", "typings", "docs"],
   "typeCheckingMode": "strict",
   "reportUnusedFunction": "none",
   "reportPrivateUsage": "none",
