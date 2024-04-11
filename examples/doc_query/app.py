@@ -8,8 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Generator, Sequence, cast
 
-import chromadb  # pyright: ignore[reportMissingTypeStubs]
-import chromadb.api  # pyright: ignore[reportMissingTypeStubs]
+import chromadb
+import chromadb.api
 import pypdf
 import shiny.experimental as x
 import tiktoken
@@ -114,7 +114,7 @@ def server(input: Inputs, output: Outputs, session: Session):
         # because the extra stuff just won't be used.
         n_documents = math.ceil(max_context_tokens / APPROX_DOCUMENT_SIZE)
 
-        results = collection.query(
+        results = collection.query(  # pyright: ignore[reportUnknownMemberType]
             query_texts=[query],
             n_results=min(collection.count(), n_documents),
         )
@@ -258,7 +258,7 @@ def extract_text_from_pdf(pdf_path: str | Path) -> str:
 
 
 async def add_file_content_to_db(
-    collection: chromadb.api.Collection,
+    collection: chromadb.api.Collection,  # pyright: ignore[reportPrivateImportUsage]
     file: str | Path,
     label: str,
     debug: bool = False,
@@ -283,7 +283,7 @@ async def add_file_content_to_db(
         for i in range(len(text_chunks)):
             p.set(value=i, message="Adding text to database...")
             await asyncio.sleep(0)
-            collection.add(
+            collection.add(  # pyright: ignore[reportUnknownMemberType]
                 documents=text_chunks[i],
                 metadatas={"filename": label, "page": str(i)},
                 ids=f"{label}-{i}",

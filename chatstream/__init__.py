@@ -13,6 +13,7 @@ import asyncio
 import functools
 import inspect
 import json
+import os
 import sys
 import time
 from typing import (
@@ -29,9 +30,9 @@ from typing import (
     cast,
 )
 
-import shiny.experimental as x
 import tiktoken
 from htmltools import HTMLDependency
+from openai import AsyncOpenAI
 from shiny import Inputs, Outputs, Session, module, reactive, render, ui
 
 from .openai_types import (
@@ -41,16 +42,15 @@ from .openai_types import (
     openai_model_context_limits,
 )
 
-if "pyodide" in sys.modules:
-    from . import openai_pyodide as openai
-else:
-    import openai
-
 if sys.version_info < (3, 10):
     from typing_extensions import ParamSpec, TypeGuard
 else:
     from typing import ParamSpec, TypeGuard
 
+
+client = AsyncOpenAI(
+    api_key=os.environ["OPENAI_API_KEY"],  # this is also the default, it can be omitted
+)
 
 DEFAULT_MODEL: OpenAiModel = "gpt-3.5-turbo"
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
@@ -175,12 +175,14 @@ class chat_server:
         text_input_placeholder: str | Callable[[], str] | None = None,
         button_label: str | Callable[[], str] = "Ask",
         throttle: float | Callable[[], float] = DEFAULT_THROTTLE,
-        query_preprocessor: Callable[[str], str]
-        | Callable[[str], Awaitable[str]]
-        | None = None,
-        answer_preprocessor: Callable[[str], ui.TagChild]
-        | Callable[[str], Awaitable[ui.TagChild]]
-        | None = None,
+        query_preprocessor: (
+            Callable[[str], str] | Callable[[str], Awaitable[str]] | None
+        ) = None,
+        answer_preprocessor: (
+            Callable[[str], ui.TagChild]
+            | Callable[[str], Awaitable[ui.TagChild]]
+            | None
+        ) = None,
         debug: bool = False,
     ):
         self.input = input
@@ -222,15 +224,15 @@ class chat_server:
             tuple[ChatCompletionStreaming, ...]
         ] = reactive.Value(tuple())
 
-        self.streaming_chat_string_pieces: reactive.Value[
-            tuple[str, ...]
-        ] = reactive.Value(tuple())
+        self.streaming_chat_string_pieces: reactive.Value[tuple[str, ...]] = (
+            reactive.Value(tuple())
+        )
 
         self._ask_trigger = reactive.Value(0)
 
-        self.session_messages: reactive.Value[
-            tuple[ChatMessageEnriched, ...]
-        ] = reactive.Value(tuple())
+        self.session_messages: reactive.Value[tuple[ChatMessageEnriched, ...]] = (
+            reactive.Value(tuple())
+        )
 
         self.hide_query_ui: reactive.Value[bool] = reactive.Value(False)
 
@@ -255,13 +257,13 @@ class chat_server:
             current_batch = self.streaming_chat_messages_batch()
 
             for message in current_batch:
-                if "content" in message["choices"][0]["delta"]:
+                if message.choices[0].delta.content:
                     self.streaming_chat_string_pieces.set(
                         self.streaming_chat_string_pieces()
-                        + (message["choices"][0]["delta"]["content"],)
+                        + (message.choices[0].delta.content,)
                     )
 
-                finish_reason = message["choices"][0]["finish_reason"]
+                finish_reason = message.choices[0].finish_reason
                 if finish_reason in ["stop", "length"]:
                     # If we got here, we know that streaming_chat_string is not None.
                     current_message_str = "".join(self.streaming_chat_string_pieces())
@@ -353,10 +355,9 @@ class chat_server:
             # this Task (which would block other computation to happen, like running
             # reactive stuff).
             messages: StreamResult[ChatCompletionStreaming] = stream_to_reactive(
-                openai.ChatCompletion.acreate(  # pyright: ignore[reportUnknownMemberType, reportGeneralTypeIssues]
+                client.chat.completions.create(  # pyright: ignore
                     model=self.model(),
-                    api_key=self.api_key(),
-                    messages=outgoing_messages_normalized,
+                    messages=outgoing_messages_normalized,  # pyright: ignore
                     stream=True,
                     temperature=self.temperature(),
                     **extra_kwargs,
@@ -418,7 +419,7 @@ class chat_server:
                 return ui.div()
 
             return ui.div(
-                x.ui.input_text_area(
+                ui.input_text_area(
                     "query",
                     None,
                     # value="2+2",
