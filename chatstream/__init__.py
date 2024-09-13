@@ -347,6 +347,7 @@ class chat_server:
 
             client = AsyncOpenAI(
                 base_url=self.url(),
+                api_key="test",
             )
 
             # Launch a Task that updates the chat string asynchronously. We run this in
