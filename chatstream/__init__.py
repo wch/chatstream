@@ -348,7 +348,7 @@ class chat_server:
 
             extra_kwargs = {}
             if self.url() is not None:
-                extra_kwargs["url"] = self.url()
+                extra_kwargs["base_url"] = self.url()
 
             # Launch a Task that updates the chat string asynchronously. We run this in
             # a separate task so that the data can come in without need to await it in
