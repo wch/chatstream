@@ -343,10 +343,10 @@ class chat_server:
                 print(f"TOKENS USED: {tokens_total}")
 
             extra_kwargs = {}
+	    
 
             client = AsyncOpenAI(
                 base_url=self.url(),
-                api_key=os.environ["OPENAI_API_KEY"],  # this is also the default, it can be omitted
             )
 
             # Launch a Task that updates the chat string asynchronously. We run this in
