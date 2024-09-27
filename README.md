@@ -1,3 +1,6 @@
+**Note: Chatstream is now out of date. Instead, please use the [`ui.Chat()` component](https://shiny.posit.co/blog/posts/shiny-python-1.0/#new-chat-component) that is now bundled with Shiny for Python.**
+
+
 chatstream for Shiny for Python
 ===============================
 
