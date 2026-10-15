@@ -218,8 +218,8 @@ class chat_server:
 
         self.print_request = debug
 
-        # This contains a tuple of the most recent messages when a streaming response is
-        # coming in. When not streaming, this is set to an empty tuple.
+        # This contains a tuple of all messages received so far for the streaming
+        # response that is coming in. When not streaming, this is set to an empty tuple.
         self.streaming_chat_messages_batch: reactive.Value[
             tuple[ChatCompletionStreaming, ...]
         ] = reactive.Value(tuple())
@@ -227,6 +227,10 @@ class chat_server:
         self.streaming_chat_string_pieces: reactive.Value[tuple[str, ...]] = (
             reactive.Value(tuple())
         )
+
+        # The number of messages in streaming_chat_messages_batch that have already been
+        # added to streaming_chat_string_pieces.
+        self._n_streaming_messages_handled = 0
 
         self._ask_trigger = reactive.Value(0)
 
@@ -254,9 +258,12 @@ class chat_server:
         @reactive.Effect
         @reactive.event(self.streaming_chat_messages_batch)
         async def finalize_streaming_result():
-            current_batch = self.streaming_chat_messages_batch()
+            all_messages = self.streaming_chat_messages_batch()
+            n_handled = self._n_streaming_messages_handled
+            new_messages = all_messages[n_handled:]
+            self._n_streaming_messages_handled = len(all_messages)
 
-            for message in current_batch:
+            for message in new_messages:
                 if message.choices[0].delta.content:
                     self.streaming_chat_string_pieces.set(
                         self.streaming_chat_string_pieces()
@@ -349,6 +356,8 @@ class chat_server:
             extra_kwargs = {}
             if self.url() is not None:
                 extra_kwargs["url"] = self.url()
+
+            self._n_streaming_messages_handled = 0
 
             # Launch a Task that updates the chat string asynchronously. We run this in
             # a separate task so that the data can come in without need to await it in
@@ -455,18 +464,14 @@ class chat_server:
 
     async def _delayed_set_query(self, query: str, delay: float) -> None:
         await asyncio.sleep(delay)
-        async with reactive.lock():
-            ui.update_text_area("query", value=query, session=self.session)
-            await reactive.flush()
+        ui.update_text_area("query", value=query, session=self.session)
 
         # Short delay before triggering ask_trigger.
         safe_create_task(self._delayed_new_query_trigger(0.2))
 
     async def _delayed_new_query_trigger(self, delay: float) -> None:
         await asyncio.sleep(delay)
-        async with reactive.lock():
-            self._ask_trigger.set(self._ask_trigger() + 1)
-            await reactive.flush()
+        self._ask_trigger.set(self._ask_trigger() + 1)
 
     def ask(self, query: str, delay: float = 1) -> None:
         """Programmatically ask a question."""
@@ -532,6 +537,9 @@ class StreamResult(Generic[T]):
 
 
 # Converts an async generator of type T into a reactive source of type tuple[T, ...].
+# The value is every message received so far. Setting the value does not wait for
+# readers to run, so a reader can see several updates in one run. To get each message
+# once, a reader keeps a count of the messages it has handled.
 def stream_to_reactive(
     func: AsyncGenerator[T, None] | Awaitable[AsyncGenerator[T, None]],
     throttle: float = 0,
@@ -545,6 +553,7 @@ def stream_to_reactive(
         func = cast(AsyncGenerator[T, None], func)
 
         last_message_time = time.time()
+        all_messages: tuple[T, ...] = tuple()
         message_batch: list[T] = []
 
         async for message in func:
@@ -553,18 +562,15 @@ def stream_to_reactive(
             message_batch.append(message)
 
             if time.time() - last_message_time > throttle:
-                async with reactive.lock():
-                    val.set(tuple(message_batch))
-                    await reactive.flush()
-
+                all_messages += tuple(message_batch)
+                val.set(all_messages)
                 last_message_time = time.time()
                 message_batch = []
 
-        # Once the stream has ended, flush the remaining messages.
+        # Once the stream has ended, publish the remaining messages.
         if len(message_batch) > 0:
-            async with reactive.lock():
-                val.set(tuple(message_batch))
-                await reactive.flush()
+            all_messages += tuple(message_batch)
+            val.set(all_messages)
 
     task = safe_create_task(task_main())
 
